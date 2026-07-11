@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="color-scheme" content="dark" />
+<meta name="theme-color" content="#0d0f14" />
+<title>在庫 & 原価マネージャー</title>
+<style>
+  :root{
+    color-scheme:dark;
+    --bg:#0d0f14; --panel:#14171f; --line:rgba(255,255,255,.07);
+    --txt:#f1f5f9; --sub:#aab2c0; --faint:#7a8290;
+    --cyan:#22d3ee; --emerald:#6ee7b7; --pink:#f472b6; --amber:#fbbf24;
+  }
+  html{background:#0d0f14}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;min-height:100dvh;background:#0d0f14;color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+    padding-bottom:env(safe-area-inset-bottom)}
+  body::before{content:"";position:fixed;inset:0;background:#0d0f14;z-index:-1}
+  .num{font-variant-numeric:tabular-nums}
+  header{position:sticky;top:0;z-index:20;background:rgba(13,15,20,.85);
+    backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
+    padding:calc(env(safe-area-inset-top) + 10px) 16px 10px}
+  .hrow{max-width:720px;margin:0 auto;display:flex;align-items:center;gap:10px}
+  .logo{width:32px;height:32px;border-radius:9px;flex:0 0 auto;
+    background:linear-gradient(135deg,var(--cyan),#c026d3);display:grid;place-items:center;
+    color:#0d0f14;font-weight:800}
+  h1{font-size:17px;margin:0;font-weight:700}
+  .hsub{font-size:12px;color:var(--faint);margin-top:2px}
+  main{max-width:720px;margin:0 auto;padding:16px}
+  .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px}
+  .stat{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:12px}
+  .stat .l{font-size:12px;color:var(--sub);margin-bottom:5px}
+  .stat .v{font-size:19px;font-weight:700}
+  .btn{border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:.15s}
+  .btn-primary{background:var(--cyan);color:#0d0f14;height:36px;padding:0 14px}
+  .btn-primary:active{background:#67e8f9}
+  .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--txt);height:40px;flex:1}
+  .btn-ghost:active{background:rgba(255,255,255,.05)}
+  .btn-ghost2{background:transparent;border:1px solid var(--line);color:var(--txt);height:36px;width:40px;font-size:16px}
+  .btn-ghost2:active{background:rgba(255,255,255,.05)}
+  .pcard{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:14px;
+    overflow:hidden;margin-bottom:10px;animation:fi .2s ease both}
+  @keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.pcard,.sheet{animation:none}}
+  .phead{display:flex;gap:12px;align-items:center;padding:12px}
+  .thumb{width:52px;height:52px;border-radius:10px;flex:0 0 auto;object-fit:cover;
+    background:rgba(255,255,255,.05);display:grid;place-items:center;color:var(--faint);font-size:20px}
+  .pinfo{flex:1;min-width:0}
+  .pname{font-weight:700;font-size:17px;color:#f8fafc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pmeta{font-size:13px;color:var(--sub);margin-top:4px}
+  .caret{color:var(--faint);font-size:13px;width:22px;text-align:center;flex:0 0 auto;background:none;border:none}
+  .iconbtn{width:32px;height:32px;border-radius:9px;border:none;background:transparent;
+    color:var(--faint);cursor:pointer;font-size:15px;display:grid;place-items:center;flex:0 0 auto}
+  .iconbtn:active{background:rgba(255,255,255,.06)}
+  .vlist{border-top:1px solid var(--line)}
+  .vrow{padding:11px 12px 12px;border-bottom:1px solid var(--line)}
+  .vtop{display:flex;align-items:center;gap:8px}
+  .vlabel{font-weight:700;font-size:15.5px;color:#f1f5f9;margin-right:auto}
+  .badge{font-size:12px;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,.05);color:var(--sub)}
+  .badge.low{background:rgba(244,114,182,.12);color:var(--pink)}
+  .badge.ok{background:rgba(110,231,183,.12);color:var(--emerald)}
+  .vgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px;text-align:center}
+  .vc{background:rgba(255,255,255,.03);border-radius:8px;padding:6px 2px}
+  .vc .l{font-size:11px;color:var(--faint)}
+  .vc .v{font-size:14.5px;font-weight:700;margin-top:2px}
+  .beline{font-size:12.5px;margin-top:9px;color:var(--sub)}
+  .addv{width:100%;padding:10px;background:none;border:none;border-top:1px solid var(--line);
+    color:var(--cyan);font-size:13px;cursor:pointer}
+  .addv:active{background:rgba(255,255,255,.03)}
+  .empty{border:1px dashed rgba(255,255,255,.12);border-radius:14px;padding:56px 20px;text-align:center;color:var(--sub)}
+  .empty .big{font-size:30px;margin-bottom:10px}
+  .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);
+    z-index:40;display:flex;align-items:flex-end;justify-content:center}
+  @media(min-width:560px){.backdrop{align-items:center}}
+  .sheet{background:var(--panel);border:1px solid rgba(255,255,255,.1);
+    border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;
+    padding:20px;animation:up .22s ease both;padding-bottom:calc(20px + env(safe-area-inset-bottom))}
+  @media(min-width:560px){.sheet{border-radius:20px}}
+  @keyframes up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
+  .shead{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .shead h2{font-size:16px;margin:0}
+  .field{display:block;margin-bottom:12px}
+  .field .lab{font-size:11px;color:var(--faint);margin-bottom:5px;display:block}
+  input[type=text],input[type=number]{width:100%;height:42px;padding:0 12px;border-radius:10px;
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--txt);
+    font-size:15px;outline:none;-webkit-appearance:none}
+  input:focus{border-color:rgba(34,211,238,.5)}
+  input::placeholder{color:var(--faint)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .imgpick{width:100%;height:120px;border-radius:12px;border:1px dashed rgba(255,255,255,.14);
+    background:rgba(255,255,255,.03);display:grid;place-items:center;color:var(--sub);
+    cursor:pointer;overflow:hidden;margin-bottom:12px;position:relative}
+  .imgpick img{width:100%;height:100%;object-fit:cover}
+  .imgpick .rm{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.6);border:none;color:#fff;
+    width:28px;height:28px;border-radius:8px;font-size:15px}
+  .calcbox{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:10px;
+    padding:12px;margin:4px 0 12px}
+  .crow{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:13px}
+  .crow .l{color:var(--sub)} .crow .v{font-weight:600}
+  .actions{display:flex;gap:10px;margin-top:8px}
+  .hint{font-size:11px;color:var(--faint);margin:-6px 0 12px;line-height:1.5}
+  .pink{color:var(--pink)} .cyan{color:var(--cyan)} .emerald{color:var(--emerald)} .amber{color:var(--amber)}
+  .divlab{font-size:11px;color:var(--faint);margin:14px 0 8px;border-top:1px solid var(--line);padding-top:12px}
+  input.auto{color:var(--cyan);background:rgba(34,211,238,.06);border-color:rgba(34,211,238,.2)}
+  .autotag{font-size:10px;color:var(--cyan);margin-left:6px}
+  .pricebtn{width:100%;height:40px;border-radius:10px;background:rgba(34,211,238,.08);
+    border:1px solid rgba(34,211,238,.28);color:var(--cyan);font-size:13.5px;font-weight:700;
+    margin-bottom:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+  .pricebtn:active{background:rgba(34,211,238,.16)}
+  .pricebtn:disabled{opacity:.4;cursor:default}
+  .pghead{font-size:13.5px;color:var(--sub);margin-bottom:14px;line-height:1.5}
+  .pglist{display:flex;flex-direction:column;gap:8px}
+  .prow{display:grid;grid-template-columns:auto 1fr;grid-template-areas:"rate price" "sub sub";
+    gap:3px 10px;text-align:left;padding:13px 15px;border-radius:12px;width:100%;
+    background:rgba(255,255,255,.04);border:1px solid var(--line);cursor:pointer}
+  .prow:active{background:rgba(34,211,238,.12)}
+  .pr-rate{grid-area:rate;align-self:center;font-size:15px;font-weight:700}
+  .pr-price{grid-area:price;text-align:right;font-size:21px;font-weight:800;color:#f8fafc}
+  .pr-sub{grid-area:sub;font-size:12.5px;color:var(--sub)}
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <div class="logo">在</div>
+    <div style="margin-right:auto">
+      <h1>在庫 &amp; 原価マネージャー</h1>
+      <div class="hsub num" id="hsub">0 商品</div>
+    </div>
+    <button class="btn btn-ghost2" id="setBtn" title="バックアップ">⚙</button>
+    <button class="btn btn-primary" id="addBtn">＋ 商品</button>
+  </div>
+</header>
+
+<main>
+  <div class="stats">
+    <div class="stat"><div class="l">総売上</div><div class="v num" id="sRev">¥0</div></div>
+    <div class="stat"><div class="l">総利益</div><div class="v num cyan" id="sProfit">¥0</div></div>
+    <div class="stat"><div class="l">在庫残</div><div class="v num emerald" id="sStock">0</div></div>
+  </div>
+  <div id="list"></div>
+</main>
+
+<script>
+/* ---------- IndexedDB ---------- */
+const DB="inv-mgr", STORE="products";
+function db(){return new Promise((res,rej)=>{const r=indexedDB.open(DB,1);
+  r.onupgradeneeded=()=>r.result.createObjectStore(STORE,{keyPath:"id"});
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);});}
+async function idbAll(){const d=await db();return new Promise((res,rej)=>{
+  const t=d.transaction(STORE).objectStore(STORE).getAll();
+  t.onsuccess=()=>res(t.result||[]); t.onerror=()=>rej(t.error);});}
+async function idbPut(o){const d=await db();return new Promise((res,rej)=>{
+  const t=d.transaction(STORE,"readwrite").objectStore(STORE).put(o);
+  t.onsuccess=()=>res(); t.onerror=()=>rej(t.error);});}
+async function idbDel(id){const d=await db();return new Promise((res,rej)=>{
+  const t=d.transaction(STORE,"readwrite").objectStore(STORE).delete(id);
+  t.onsuccess=()=>res(); t.onerror=()=>rej(t.error);});}
+
+/* ---------- helpers ---------- */
+const yen=n=>isFinite(n)?"¥"+Math.round(n).toLocaleString("ja-JP"):"¥0";
+const pct=n=>isFinite(n)?Math.round(n*1000)/10+"%":"—";
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const $=s=>document.querySelector(s);
+const num=v=>{const n=parseFloat(v);return isFinite(n)?n:null;};
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+let products=[];
+const expanded={};
+
+/* ---------- variant math ---------- */
+function vcalc(v){
+  const cost=+v.cost||0, price=+v.price||0, qty=+v.qty||0;
+  const orderQty=+v.orderQty||0, orderTotal=+v.order||0;
+  const total=(v.total!=="" && v.total!=null)? +v.total : price*qty;
+  const stock=orderQty-qty;
+  const profit=total-cost*qty;
+  const orderCost=orderTotal>0?orderTotal:cost*orderQty;
+  const breakEven=price>0?Math.ceil(orderCost/price):NaN;
+  const net=price*qty-orderCost;
+  return {cost,price,qty,orderQty,total,stock,profit,orderCost,breakEven,net};
+}
+
+/* ---------- render ---------- */
+function render(){
+  $("#hsub").textContent=products.length+" 商品";
+  let rev=0,profit=0,stock=0;
+  products.forEach(p=>p.variants.forEach(v=>{const c=vcalc(v);
+    rev+=c.total; profit+=c.profit; stock+=c.stock;}));
+  $("#sRev").textContent=yen(rev);
+  $("#sProfit").textContent=yen(profit);
+  $("#sProfit").className="v num "+(profit<0?"pink":"cyan");
+  $("#sStock").textContent=stock;
+
+  const list=$("#list");
+  if(!products.length){
+    list.innerHTML='<div class="empty"><div class="big">📦</div>まだ商品がありません<br><br>'+
+      '<button class="btn btn-primary" onclick="editProduct()">＋ 最初の商品を追加</button></div>';
+    return;
+  }
+  list.innerHTML="";
+  products.forEach(p=>{
+    let pProfit=0,pStock=0;
+    p.variants.forEach(v=>{const c=vcalc(v);pProfit+=c.profit;pStock+=c.stock;});
+    const open=!!expanded[p.id];
+    const card=document.createElement("div");card.className="pcard";
+    const thumb=p.image?`<img class="thumb" src="${p.image}">`:`<div class="thumb">📦</div>`;
+    card.innerHTML=`
+      <div class="phead">
+        <button class="caret">${open?"▾":"▸"}</button>
+        ${thumb}
+        <div class="pinfo">
+          <div class="pname">${esc(p.name||"（無名）")}</div>
+          <div class="pmeta num">${p.variants.length}種 · 在庫残 ${pStock} · 利益 <span class="${pProfit<0?'pink':'cyan'}">${yen(pProfit)}</span></div>
+        </div>
+        <button class="iconbtn" data-a="ep">✎</button>
+        <button class="iconbtn" data-a="dp">🗑</button>
+      </div>`;
+    const head=card.querySelector(".phead");
+    head.querySelector(".caret").onclick=()=>{expanded[p.id]=!open;render();};
+    head.querySelector('[data-a="ep"]').onclick=()=>editProduct(p);
+    head.querySelector('[data-a="dp"]').onclick=()=>{
+      if(confirm(`「${p.name||"この商品"}」を削除しますか？`))delProduct(p.id);};
+    head.querySelector(".thumb").onclick=()=>{expanded[p.id]=!open;render();};
+
+    if(open){
+      const wrap=document.createElement("div");wrap.className="vlist";
+      p.variants.forEach(v=>{
+        const c=vcalc(v);
+        const badge=c.orderQty>0
+          ? `<span class="badge ${c.stock<=0?'low':'ok'}">在庫 ${c.stock}</span>`
+          : `<span class="badge">在庫 —</span>`;
+        let be="";
+        if(isFinite(c.breakEven)){
+          if(c.qty>=c.breakEven) be=`<span class="emerald">黒字化済み（純益 ${yen(c.net)}）</span>`;
+          else be=`黒字ライン <b class="amber">${c.breakEven}個</b>（あと ${c.breakEven-c.qty}個）`;
+        }
+        const row=document.createElement("div");row.className="vrow";
+        row.innerHTML=`
+          <div class="vtop">
+            <span class="vlabel">${esc(v.label||"（無名）")}</span>
+            ${badge}
+            <button class="iconbtn" data-a="ev">✎</button>
+            <button class="iconbtn" data-a="dv">🗑</button>
+          </div>
+          <div class="vgrid num">
+            <div class="vc"><div class="l">売価</div><div class="v">${yen(c.price)}</div></div>
+            <div class="vc"><div class="l">販売数</div><div class="v">${c.qty}</div></div>
+            <div class="vc"><div class="l">売上</div><div class="v">${yen(c.total)}</div></div>
+            <div class="vc"><div class="l">利益</div><div class="v ${c.profit<0?'pink':'cyan'}">${yen(c.profit)}</div></div>
+          </div>
+          ${be?`<div class="beline num">${be}</div>`:""}`;
+        row.querySelector('[data-a="ev"]').onclick=()=>editVariant(p,v);
+        row.querySelector('[data-a="dv"]').onclick=()=>{
+          if(confirm(`「${v.label||"このバリアント"}」を削除しますか？`))delVariant(p,v.id);};
+        wrap.appendChild(row);
+      });
+      const add=document.createElement("button");add.className="addv";
+      add.textContent="＋ サイズ / カラーを追加";
+      add.onclick=()=>editVariant(p,null);
+      wrap.appendChild(add);
+      card.appendChild(wrap);
+    }
+    list.appendChild(card);
+  });
+}
+
+/* ---------- mutations ---------- */
+async function persist(p){const i=products.findIndex(x=>x.id===p.id);
+  if(i>=0)products[i]=p; else products.push(p); await idbPut(p);}
+async function delProduct(id){products=products.filter(p=>p.id!==id);await idbDel(id);render();}
+async function delVariant(p,vid){p.variants=p.variants.filter(v=>v.id!==vid);await persist(p);render();}
+
+/* ---------- product editor ---------- */
+function editProduct(p){
+  const isNew=!p;
+  const d=p?{...p}:{id:uid(),name:"",image:"",variants:[]};
+  const back=mkSheet(isNew?"商品を追加":"商品を編集",`
+    <label class="imgpick" id="imgpick">
+      ${d.image?`<img src="${d.image}"><button class="rm" id="imgrm">✕</button>`:'＋ 画像を追加'}
+      <input type="file" accept="image/*" id="imgfile" hidden>
+    </label>
+    <label class="field"><span class="lab">商品名</span>
+      <input type="text" id="f_name" value="${esc(d.name)}" placeholder="オリジナルTシャツ"></label>
+    <div class="actions">
+      <button class="btn btn-ghost" id="cancel">キャンセル</button>
+      <button class="btn btn-primary" style="flex:1;height:40px" id="save">保存</button>
+    </div>`);
+  const g=id=>back.querySelector("#"+id);
+  attachImage(back,d);
+  g("cancel").onclick=()=>back.remove();
+  g("save").onclick=async()=>{
+    d.name=g("f_name").value.trim();
+    if(!d.name){back.remove();return;}
+    await persist(d); expanded[d.id]=true; render(); back.remove();
+  };
+}
+
+/* ---------- variant editor ---------- */
+function editVariant(p,v){
+  const isNew=!v;
+  const d=v?{...v}:{id:uid(),label:"",cost:"",order:"",orderQty:"",price:"",qty:"",total:""};
+  let order=["price","qty","total"];
+  const back=mkSheet(isNew?"サイズ / カラーを追加":"バリアントを編集",`
+    <label class="field"><span class="lab">サイズ / カラー名</span>
+      <input type="text" id="f_label" value="${esc(d.label)}" placeholder="M / 黒"></label>
+
+    <div class="grid2">
+      <label class="field"><span class="lab">原価（1個）</span>
+        <input type="number" inputmode="decimal" id="f_cost" value="${d.cost}" placeholder="0"></label>
+      <label class="field"><span class="lab">発注個数</span>
+        <input type="number" inputmode="decimal" id="f_orderQty" value="${d.orderQty}" placeholder="0"></label>
+    </div>
+    <label class="field"><span class="lab">発注価格（合計・任意。空なら原価×発注個数）</span>
+      <input type="number" inputmode="decimal" id="f_order" value="${d.order}" placeholder="0"></label>
+
+    <button type="button" class="pricebtn" id="priceGuide">💡 原価率ごとの価格の目安を見る</button>
+
+    <div class="grid2">
+      <label class="field"><span class="lab">販売価格（1個）</span>
+        <input type="number" inputmode="decimal" id="f_price" value="${d.price}" placeholder="0"></label>
+      <label class="field"><span class="lab">販売個数</span>
+        <input type="number" inputmode="decimal" id="f_qty" value="${d.qty}" placeholder="0"></label>
+    </div>
+    <label class="field"><span class="lab">トータル売上（自動／手入力可）</span>
+      <input type="number" inputmode="decimal" id="f_total" value="${d.total}" placeholder="0"></label>
+    <div class="hint">売価・販売個数・売上のうち2つを入れると残り1つが自動で入ります。</div>
+
+    <div class="calcbox">
+      <div class="crow"><span class="l">在庫残</span><span class="v num" id="c_stock">0</span></div>
+      <div class="crow"><span class="l">利益（販売分）</span><span class="v num" id="c_profit">¥0</span></div>
+      <div class="crow"><span class="l">黒字ライン（損益分岐）</span><span class="v num" id="c_be">—</span></div>
+      <div class="crow"><span class="l">投資回収後の純益</span><span class="v num" id="c_net">¥0</span></div>
+    </div>
+
+    <div class="divlab">目標から必要販売個数を逆算</div>
+    <div class="grid2">
+      <label class="field"><span class="lab">目標利益</span>
+        <input type="number" inputmode="decimal" id="f_tprofit" placeholder="例 30000"></label>
+      <label class="field"><span class="lab">→ 必要販売個数</span>
+        <input type="text" id="f_treq" readonly placeholder="—" style="color:var(--cyan)"></label>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-ghost" id="cancel">キャンセル</button>
+      <button class="btn btn-primary" style="flex:1;height:40px" id="save">保存</button>
+    </div>`);
+
+  const g=id=>back.querySelector("#"+id);
+  const F={price:g("f_price"),qty:g("f_qty"),total:g("f_total")};
+
+  function readCur(){return {
+    cost:num(g("f_cost").value)||0, price:num(F.price.value)||0,
+    qty:num(F.qty.value)||0, orderQty:num(g("f_orderQty").value)||0,
+    order:num(g("f_order").value)||0, total:num(F.total.value)};}
+
+  function triangle(){
+    const target=order[order.length-1];
+    const others=order.filter(k=>k!==target);
+    if(target==="total"){
+      const a=num(F.price.value),b=num(F.qty.value);
+      if(a!==null&&b!==null)F.total.value=Math.round(a*b*100)/100;
+    }else{
+      const total=num(F.total.value), other=num(F[others.find(k=>k!=="total")].value);
+      if(total!==null&&other)F[target].value=Math.round(total/other*100)/100;
+    }
+  }
+  function refresh(){
+    const c=readCur();
+    const total=c.total!=null?c.total:c.price*c.qty;
+    const stock=c.orderQty-c.qty;
+    const profit=total-c.cost*c.qty;
+    const orderCost=c.order>0?c.order:c.cost*c.orderQty;
+    const be=c.price>0?Math.ceil(orderCost/c.price):NaN;
+    const net=c.price*c.qty-orderCost;
+    g("c_stock").textContent=stock;
+    g("c_profit").textContent=yen(profit);
+    g("c_profit").className="v num "+(profit<0?"pink":"cyan");
+    g("c_be").textContent=isFinite(be)?be+"個":"—";
+    g("c_be").className="v num "+(isFinite(be)&&c.qty>=be?"emerald":"amber");
+    g("c_net").textContent=yen(net);
+    g("c_net").className="v num "+(net<0?"pink":"emerald");
+    const tp=num(g("f_tprofit").value);
+    if(tp!==null&&c.price>0)g("f_treq").value=Math.ceil((tp+orderCost)/c.price)+"個";
+    else g("f_treq").value="";
+  }
+  // 原価 = 発注価格 ÷ 発注個数（両方あれば自動・入力不可）
+  function recalcCost(){
+    const oq=num(g("f_orderQty").value), ot=num(g("f_order").value), ce=g("f_cost");
+    if(oq&&ot&&oq>0){ce.value=Math.round(ot/oq*100)/100;ce.readOnly=true;ce.classList.add("auto");}
+    else{ce.readOnly=false;ce.classList.remove("auto");}
+  }
+  recalcCost();
+
+  ["price","qty","total"].forEach(k=>F[k].addEventListener("input",()=>{
+    order=[k,...order.filter(x=>x!==k)];triangle();refresh();}));
+  ["f_orderQty","f_order"].forEach(id=>g(id).addEventListener("input",()=>{recalcCost();refresh();}));
+  ["f_cost","f_tprofit"].forEach(id=>g(id).addEventListener("input",refresh));
+  refresh();
+
+  g("priceGuide").onclick=()=>{
+    const c=readCur();
+    const cost=(c.orderQty>0&&c.order>0)?c.order/c.orderQty:c.cost;
+    const orderCost=c.order>0?c.order:cost*c.orderQty;
+    if(!cost||cost<=0){alert("先に原価、または発注価格＋発注個数を入れてください。");return;}
+    openPricing(Math.round(cost*100)/100,orderCost,price=>{
+      F.price.value=price; order=["price","qty","total"]; triangle(); refresh();
+    });
+  };
+
+  g("cancel").onclick=()=>back.remove();
+  g("save").onclick=async()=>{
+    d.label=g("f_label").value.trim();
+    d.cost=num(g("f_cost").value)||0;
+    d.order=num(g("f_order").value)||0;
+    d.orderQty=num(g("f_orderQty").value)||0;
+    d.price=num(F.price.value)||0;
+    d.qty=num(F.qty.value)||0;
+    d.total=F.total.value===""?"":(num(F.total.value)||0);
+    if(!d.label && !d.orderQty && !d.qty){back.remove();return;}
+    const i=p.variants.findIndex(x=>x.id===d.id);
+    if(i>=0)p.variants[i]=d; else p.variants.push(d);
+    await persist(p); expanded[p.id]=true; render(); back.remove();
+  };
+}
+
+/* ---------- backup (export / import) ---------- */
+function openSettings(){
+  const back=mkSheet("バックアップ",`
+    <div class="hint" style="margin:0 0 16px;font-size:12.5px;line-height:1.6">
+      データはこの端末のブラウザ内（IndexedDB）だけに保存されています。<br>
+      機種変更・アプリ削除・ブラウザのデータ消去で消えるので、ときどき書き出して保管してください。</div>
+    <button class="btn btn-primary" id="exp" style="width:100%;height:46px;margin-bottom:10px">⬇ バックアップを書き出す</button>
+    <label class="btn btn-ghost" id="impLbl" style="width:100%;height:46px">⬆ バックアップから復元
+      <input type="file" accept="application/json,.json" id="impFile" hidden></label>
+    <div class="hint" style="margin-top:14px;font-size:11.5px">復元すると、同じ商品は上書き・無い商品は追加されます（今のデータは消えません）。</div>`);
+  back.querySelector("#exp").onclick=exportData;
+  back.querySelector("#impFile").onchange=e=>{
+    const f=e.target.files[0]; if(f)importData(f,back);};
+}
+function exportData(){
+  const payload={app:"inv-mgr",version:1,exportedAt:new Date().toISOString(),products};
+  const blob=new Blob([JSON.stringify(payload)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download="inventory-backup-"+new Date().toISOString().slice(0,10)+".json";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+async function importData(file,back){
+  try{
+    const parsed=JSON.parse(await file.text());
+    const arr=Array.isArray(parsed)?parsed:parsed.products;
+    if(!Array.isArray(arr))throw new Error("bad");
+    if(!confirm(`${arr.length}件を取り込みます。よろしいですか？`))return;
+    for(const p of arr){
+      const prod=Array.isArray(p.variants)
+        ? {id:p.id||uid(),name:p.name||"",image:p.image||"",variants:p.variants}
+        : {id:p.id||uid(),name:p.name||"",image:p.image||"",variants:[]};
+      const i=products.findIndex(x=>x.id===prod.id);
+      if(i>=0)products[i]=prod; else products.push(prod);
+      await idbPut(prod);
+    }
+    render();
+    if(back)back.remove();
+    alert("取り込みが完了しました。");
+  }catch(e){
+    alert("ファイルを読み込めませんでした。JSONが壊れている可能性があります。");
+  }
+}
+
+/* ---------- pricing guide ---------- */
+function openPricing(cost,orderCost,onPick){
+  const rates=[20,25,30,33,40,50,60,70];
+  const tone=r=>r<=30?"cyan":r<=40?"emerald":r<=50?"amber":"pink";
+  const rows=rates.map(r=>{
+    const price=Math.round(cost/(r/100));
+    const margin=price-cost;
+    const be=orderCost>0?Math.ceil(orderCost/price):null;
+    return `<button class="prow" data-price="${price}">
+      <span class="pr-rate ${tone(r)}">原価率 ${r}%</span>
+      <span class="pr-price num">${yen(price)}</span>
+      <span class="pr-sub num">粗利 ${yen(margin)}/個${be!=null?` ・ 黒字ライン ${be}個`:""}</span>
+    </button>`;
+  }).join("");
+  const back=mkSheet("価格の目安",`
+    <div class="pghead num">原価 <b style="color:var(--txt)">${yen(cost)}</b>${orderCost>0?` ・ 投資額 ${yen(orderCost)}`:""}<br>
+      原価率から販売価格を逆算しています。行をタップすると販売価格に反映。</div>
+    <div class="pglist">${rows}</div>`);
+  back.querySelectorAll(".prow").forEach(b=>b.onclick=()=>{onPick(+b.dataset.price);back.remove();});
+}
+
+/* ---------- sheet + image utils ---------- */
+function mkSheet(title,inner){
+  const back=document.createElement("div");back.className="backdrop";
+  back.innerHTML=`<div class="sheet"><div class="shead"><h2>${title}</h2>
+    <button class="iconbtn" id="x">✕</button></div>${inner}</div>`;
+  document.body.appendChild(back);
+  back.querySelector(".sheet").onclick=e=>e.stopPropagation();
+  back.onclick=()=>back.remove();
+  back.querySelector("#x").onclick=()=>back.remove();
+  return back;
+}
+function attachImage(back,d){
+  const pick=back.querySelector("#imgpick");
+  if(!pick)return;
+  const bindFile=()=>{
+    const inp=back.querySelector("#imgfile");
+    inp.onchange=e=>{
+      const file=e.target.files[0];if(!file)return;
+      const rd=new FileReader();
+      rd.onload=()=>{const img=new Image();img.onload=()=>{
+        const max=512,sc=Math.min(1,max/Math.max(img.width,img.height));
+        const cv=document.createElement("canvas");cv.width=img.width*sc;cv.height=img.height*sc;
+        cv.getContext("2d").drawImage(img,0,0,cv.width,cv.height);
+        d.image=cv.toDataURL("image/jpeg",0.72);
+        pick.innerHTML=`<img src="${d.image}"><button class="rm" id="imgrm">✕</button>`+
+          '<input type="file" accept="image/*" id="imgfile" hidden>';
+        bindRm();bindFile();
+      };img.src=rd.result;};
+      rd.readAsDataURL(file);
+    };
+  };
+  const bindRm=()=>{const rm=back.querySelector("#imgrm");if(!rm)return;
+    rm.onclick=ev=>{ev.preventDefault();ev.stopPropagation();d.image="";
+      pick.innerHTML='＋ 画像を追加<input type="file" accept="image/*" id="imgfile" hidden>';
+      bindFile();};};
+  bindFile();bindRm();
+}
+window.editProduct=editProduct;
+$("#addBtn").onclick=()=>editProduct();
+$("#setBtn").onclick=openSettings;
+
+/* ---------- boot + migrate flat -> two-tier ---------- */
+(async()=>{
+  const raw=await idbAll();
+  let changed=false;
+  products=raw.map(r=>{
+    if(Array.isArray(r.variants))return r;
+    changed=true;
+    return {id:r.id,name:r.name||"",image:r.image||"",variants:[{
+      id:uid(),label:"",cost:r.cost||0,order:r.order||0,orderQty:r.qty||0,
+      price:r.price||0,qty:r.qty||0,total:r.total||0
+    }]};
+  });
+  if(changed)for(const p of products)await idbPut(p);
+  render();
+})();
+
+/* ---------- offline: service worker ---------- */
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("./sw.js").catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
