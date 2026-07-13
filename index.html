@@ -945,6 +945,15 @@ function openSettings(){
   const back=mkSheet("設定",`
     <button class="btn btn-primary" id="stg" style="width:100%;height:46px;margin-bottom:10px;background:rgba(34,211,238,.14);color:var(--cyan);border:1px solid rgba(34,211,238,.35)">⚙ 進捗ステータス（工程）を編集</button>
     <button class="btn btn-ghost" id="upd" style="width:100%;height:46px;margin-bottom:16px">🔄 アプリを最新に更新</button>
+    <div class="divlab" style="margin-top:0">BASE連携</div>
+    <div class="hint" style="margin:0 0 12px;font-size:12.5px;line-height:1.6">
+      BASEの「CSV商品管理 App」用のCSVを書き出します。<br>
+      <b>まずBASEから「商品を新規登録するための空のCSV」をダウンロード</b>し、下で読み込ませてください（列名を合わせるため）。</div>
+    <label class="btn btn-ghost" id="baseTplLbl" style="width:100%;height:44px;margin-bottom:8px">
+      <span id="tplState">① BASEの空CSVを読み込む</span>
+      <input type="file" accept=".csv,text/csv" id="baseTpl" hidden></label>
+    <button class="btn btn-primary" id="baseExp" style="width:100%;height:44px;margin-bottom:16px;background:rgba(110,231,183,.15);color:var(--emerald);border:1px solid rgba(110,231,183,.35)">② BASE用CSVを書き出す</button>
+
     <div class="divlab" style="margin-top:0">バックアップ</div>
     <div class="hint" style="margin:0 0 14px;font-size:12.5px;line-height:1.6">
       データはこの端末のブラウザ内（IndexedDB）だけに保存されています。<br>
@@ -970,6 +979,24 @@ function openSettings(){
     location.reload(true);
   };
   back.querySelector("#exp").onclick=exportData;
+  // BASE CSV
+  const tplState=back.querySelector("#tplState");
+  if(loadBaseHeader())tplState.textContent="✓ 列名を読み込み済み（再読込するにはタップ）";
+  back.querySelector("#baseTpl").onchange=async e=>{
+    const f=e.target.files[0]; if(!f)return;
+    try{
+      const text=await f.text();
+      const first=text.split(/\r?\n/).find(l=>l.trim());
+      if(!first)throw new Error("empty");
+      const cols=parseCsvLine(first);
+      if(cols.length<3)throw new Error("bad");
+      saveBaseHeader(first);
+      tplState.textContent=`✓ 列名を読み込みました（${cols.length}列）`;
+    }catch(err){
+      alert("CSVを読み込めませんでした。BASEからダウンロードした空のCSVを選んでください。");
+    }
+  };
+  back.querySelector("#baseExp").onclick=exportBaseCsv;
   back.querySelector("#impFile").onchange=e=>{
     const f=e.target.files[0]; if(f)importData(f,back);};
 }
@@ -1047,6 +1074,128 @@ async function importData(file,back){
   }catch(e){
     alert("ファイルを読み込めませんでした。JSONが壊れている可能性があります。");
   }
+}
+
+/* ---------- BASE CSV 連携 ---------- */
+// BASEの空CSVからヘッダー行を覚えておく（列名を確実に一致させるため）
+function loadBaseHeader(){
+  try{return localStorage.getItem("inv-mgr:baseHeader")||"";}catch(e){return "";}
+}
+function saveBaseHeader(h){
+  try{localStorage.setItem("inv-mgr:baseHeader",h);}catch(e){}
+}
+
+// CSVの1行をパース（引用符対応）
+function parseCsvLine(line){
+  const out=[];let cur="",q=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(q){
+      if(c==='"'&&line[i+1]==='"'){cur+='"';i++;}
+      else if(c==='"'){q=false;}
+      else cur+=c;
+    }else{
+      if(c==='"')q=true;
+      else if(c===","){out.push(cur);cur="";}
+      else cur+=c;
+    }
+  }
+  out.push(cur);
+  return out.map(s=>s.trim().replace(/^\ufeff/,""));
+}
+const csvCell=v=>{
+  const s=String(v??"");
+  return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+};
+
+// 列名を柔軟に照合（表記ゆれに強くする）
+function matchCol(header,keys){
+  const norm=s=>s.replace(/[\s　]/g,"").toLowerCase();
+  for(let i=0;i<header.length;i++){
+    const h=norm(header[i]);
+    for(const k of keys){
+      if(h===norm(k))return i;
+    }
+  }
+  // 部分一致でフォールバック
+  for(let i=0;i<header.length;i++){
+    const h=norm(header[i]);
+    for(const k of keys){
+      if(h.includes(norm(k)))return i;
+    }
+  }
+  return -1;
+}
+
+function exportBaseCsv(){
+  const raw=loadBaseHeader();
+  if(!raw){
+    alert("先に、BASEからダウンロードした「空のCSV」を読み込ませてください。\n列名を正確に合わせるために必要です。");
+    return;
+  }
+  const header=parseCsvLine(raw);
+
+  // 各列の位置を特定
+  const C={
+    itemId:   matchCol(header,["商品ID"]),
+    variId:   matchCol(header,["種類ID"]),
+    title:    matchCol(header,["商品名","タイトル"]),
+    price:    matchCol(header,["価格"]),
+    stock:    matchCol(header,["在庫数","在庫"]),
+    visible:  matchCol(header,["公開状態","公開情報","公開"]),
+    order:    matchCol(header,["表示順"]),
+    variName: matchCol(header,["種類名"]),
+    variStock:matchCol(header,["種類在庫数"]),
+  };
+  if(C.title<0||C.price<0){
+    alert("CSVの列名を認識できませんでした。BASEの「商品を新規登録するための空のCSV」を読み込ませてください。");
+    return;
+  }
+
+  const lines=[header.map(csvCell).join(",")];
+  let n=0;
+  products.forEach(p=>{
+    // BASEは「1商品につき、種類ごとに1行」。1行目に商品情報、2行目以降は種類のみ。
+    p.variants.forEach((v,vi)=>{
+      const c=vcalc(v);
+      const row=new Array(header.length).fill("");
+      // 新規登録なので商品ID・種類IDは必ず空欄
+      if(C.itemId>=0)row[C.itemId]="";
+      if(C.variId>=0)row[C.variId]="";
+
+      const hasVariants=p.variants.length>1 || (v.label||"").trim()!=="";
+      if(vi===0){
+        if(C.title>=0)  row[C.title]=p.name||"";
+        // 商品説明は空欄（メモは内部管理用なので出力しない）
+        if(C.price>=0)  row[C.price]=c.price||0;
+        if(C.visible>=0)row[C.visible]=2;   // 2 = 非公開（安全側。確認後に公開）
+        if(C.order>=0)  row[C.order]="";
+        // 種類がない商品なら在庫数、ある商品は種類在庫数を使う
+        if(!hasVariants && C.stock>=0)row[C.stock]=Math.max(0,c.stock);
+      }else{
+        // 2行目以降は同じ商品の種類行。商品名は入れない。
+        if(C.price>=0)  row[C.price]=c.price||0;
+      }
+      if(hasVariants){
+        if(C.variName>=0) row[C.variName]=v.label||"";
+        if(C.variStock>=0)row[C.variStock]=Math.max(0,c.stock);
+      }
+      lines.push(row.map(csvCell).join(","));
+      n++;
+    });
+  });
+
+  if(!n){alert("書き出す商品がありません。");return;}
+
+  // BOM付きUTF-8（Excel/Numbersで文字化けしない）
+  const blob=new Blob(["\ufeff"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download="base-items-"+new Date().toISOString().slice(0,10)+".csv";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+  toast(`${n}行のCSVを書き出しました（非公開状態）`);
 }
 
 /* ---------- pricing guide ---------- */
