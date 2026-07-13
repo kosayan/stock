@@ -105,6 +105,35 @@
   .sortbtn{height:40px;padding:0 12px;border-radius:10px;background:rgba(255,255,255,.05);
     border:1px solid var(--line);color:var(--sub);font-size:12.5px;white-space:nowrap;cursor:pointer}
   .sortbtn:active{background:rgba(255,255,255,.1)}
+  /* ---- status ---- */
+  .stchip{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:700;
+    background:rgba(148,163,184,.15);color:#cbd5e1;white-space:nowrap;
+    display:inline-flex;align-items:center;gap:4px;border:1px solid transparent}
+  .stchip.done{background:rgba(110,231,183,.14);color:var(--emerald);border-color:rgba(110,231,183,.3)}
+  .stchip.active{background:rgba(34,211,238,.14);color:var(--cyan);border-color:rgba(34,211,238,.35)}
+  .stdot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto}
+  /* stepper in variant editor */
+  .stepper{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;
+    padding:6px;margin-bottom:12px}
+  .step{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;cursor:pointer}
+  .step:active{background:rgba(255,255,255,.05)}
+  .step .box{width:22px;height:22px;border-radius:7px;flex:0 0 auto;display:grid;place-items:center;
+    border:1.5px solid rgba(255,255,255,.22);font-size:12px;color:transparent;background:transparent}
+  .step.done .box{background:var(--emerald);border-color:var(--emerald);color:#0d0f14;font-weight:900}
+  .step.cur .box{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(34,211,238,.15)}
+  .step .nm{font-size:14px;color:var(--sub);flex:1}
+  .step.done .nm{color:var(--faint);text-decoration:line-through}
+  .step.cur .nm{color:var(--cyan);font-weight:800}
+  .step .tag{font-size:10px;color:var(--cyan);font-weight:800}
+  /* status settings list */
+  .sedit{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .sedit input{flex:1;height:40px}
+  .sedit .ord{color:var(--faint);font-size:12px;width:18px;text-align:center;flex:0 0 auto}
+  .filterbar{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px;
+    -webkit-overflow-scrolling:touch}
+  .fchip{flex:0 0 auto;font-size:12px;padding:7px 12px;border-radius:20px;cursor:pointer;
+    background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--sub);white-space:nowrap}
+  .fchip.on{background:rgba(34,211,238,.15);border-color:rgba(34,211,238,.4);color:var(--cyan);font-weight:700}
   .empty{border:1px dashed rgba(255,255,255,.12);border-radius:14px;padding:56px 20px;text-align:center;color:var(--sub)}
   .empty .big{font-size:30px;margin-bottom:10px}
   .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);
@@ -184,6 +213,7 @@
     <input class="search" id="q" placeholder="🔍 商品名・サイズで検索">
     <button class="sortbtn" id="sortBtn">利益順 ▾</button>
   </div>
+  <div class="filterbar" id="filterbar"></div>
   <div id="list"></div>
 </main>
 
@@ -213,6 +243,30 @@ function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;","
 
 let products=[];
 const expanded={};
+
+/* ---------- 全体共通ステータス（工程） ---------- */
+const DEFAULT_STAGES=[
+  "生産待ち","生産中","発送待ち","到着待ち",
+  "ページ制作待ち","在庫・詳細入力待ち","販売中"
+];
+let stages=[...DEFAULT_STAGES];
+let filterStage=null; // null = すべて
+
+function loadStages(){
+  try{
+    const raw=localStorage.getItem("inv-mgr:stages");
+    if(raw){const a=JSON.parse(raw);
+      if(Array.isArray(a)&&a.length)stages=a;}
+  }catch(e){}
+}
+function saveStages(){
+  try{localStorage.setItem("inv-mgr:stages",JSON.stringify(stages));}catch(e){}
+}
+// v.stage = 完了した工程数（0 = 何も終わってない＝最初の工程が現在地）
+const curStageIdx=v=>Math.min(+v.stage||0, stages.length);
+const stageName=v=>{const i=curStageIdx(v);
+  return i>=stages.length?"完了":stages[i];};
+const isComplete=v=>curStageIdx(v)>=stages.length;
 
 /* ---------- variant math ---------- */
 function vcalc(v){
@@ -245,14 +299,43 @@ function psum(p){
   return {profit,stock,rev,stockVal};
 }
 
+function renderFilters(){
+  const bar=$("#filterbar");
+  const counts={};
+  products.forEach(p=>p.variants.forEach(v=>{
+    const k=isComplete(v)?"__done":curStageIdx(v);
+    counts[k]=(counts[k]||0)+1;}));
+  let html=`<button class="fchip ${filterStage===null?'on':''}" data-s="">すべて</button>`;
+  stages.forEach((s,i)=>{
+    const n=counts[i]||0;
+    html+=`<button class="fchip ${filterStage===i?'on':''}" data-s="${i}">${esc(s)}${n?` ${n}`:""}</button>`;
+  });
+  const dn=counts["__done"]||0;
+  html+=`<button class="fchip ${filterStage==="__done"?'on':''}" data-s="__done">完了${dn?` ${dn}`:""}</button>`;
+  bar.innerHTML=html;
+  bar.querySelectorAll(".fchip").forEach(b=>b.onclick=()=>{
+    const s=b.dataset.s;
+    filterStage = s===""?null : s==="__done"?"__done":+s;
+    render();
+  });
+}
+
 function visibleProducts(){
   const q=query.trim().toLowerCase();
   let arr=products.map(p=>{
-    if(!q)return p;
-    const hitName=(p.name||"").toLowerCase().includes(q);
-    if(hitName)return p;
-    const vs=p.variants.filter(v=>(v.label||"").toLowerCase().includes(q));
-    return vs.length?{...p,variants:vs}:null;
+    let vs=p.variants;
+    if(filterStage!==null){
+      vs=vs.filter(v=>filterStage==="__done"
+        ? isComplete(v)
+        : (!isComplete(v)&&curStageIdx(v)===filterStage));
+      if(!vs.length)return null;
+    }
+    if(q){
+      if((p.name||"").toLowerCase().includes(q))return {...p,variants:vs};
+      const hit=vs.filter(v=>(v.label||"").toLowerCase().includes(q));
+      return hit.length?{...p,variants:hit}:null;
+    }
+    return vs===p.variants?p:{...p,variants:vs};
   }).filter(Boolean);
 
   const s=SORTS[sortIdx].k;
@@ -281,6 +364,7 @@ function render(){
   $("#sStock").textContent=stock;
   $("#sPotential").textContent=yen(potential);
   $("#sortBtn").textContent=SORTS[sortIdx].label+" ▾";
+  renderFilters();
 
   const list=$("#list");
   if(!products.length){
@@ -337,10 +421,14 @@ function render(){
           ? `<span class="chip ${c.profit<0?'low':'good'}">利益 ${yen(c.profit)}</span>`:"";
 
         const row=document.createElement("div");row.className="vrow";
+        const si=curStageIdx(v);
+        const done=isComplete(v);
+        const stCls=done?"done":si>0?"active":"";
+        const stChip=`<span class="stchip ${stCls}"><span class="stdot"></span>${esc(stageName(v))}</span>`;
         row.innerHTML=`
           <div class="vleft">
             <div class="vlabel">${esc(v.label||"（無名）")}</div>
-            <div class="vchips">${stockChip}${costChip}${soldChip}${profitChip}</div>
+            <div class="vchips">${stChip}${stockChip}${costChip}${soldChip}${profitChip}</div>
           </div>
           <div class="vright">
             <div class="vprice num ${c.price>0?'':'zero'}">${c.price>0?yen(c.price):"—"}</div>
@@ -431,6 +519,9 @@ function editVariant(p,v){
   const d=v?{...v}:{id:uid(),label:"",cost:"",order:"",orderQty:"",price:"",qty:"",total:""};
   let order=["price","qty","total"];
   const back=mkSheet(isNew?"サイズ / カラーを追加":"バリアントを編集",`
+    <div class="divlab" style="margin-top:0;border-top:none;padding-top:0">進捗ステータス</div>
+    <div class="stepper" id="stepper"></div>
+
     <label class="field"><span class="lab">サイズ / カラー名</span>
       <input type="text" id="f_label" value="${esc(d.label)}" placeholder="M / 黒"></label>
 
@@ -477,6 +568,30 @@ function editVariant(p,v){
 
   const g=id=>back.querySelector("#"+id);
   const F={price:g("f_price"),qty:g("f_qty"),total:g("f_total")};
+
+  /* 進捗ステッパー：一直線。チェックで次へ進む */
+  d.stage = +d.stage || 0;
+  function drawStepper(){
+    const cur=Math.min(d.stage, stages.length);
+    g("stepper").innerHTML = stages.map((s,i)=>{
+      const done=i<cur;
+      const isCur=i===cur;
+      return `<div class="step ${done?'done':''} ${isCur?'cur':''}" data-i="${i}">
+        <div class="box">✓</div>
+        <div class="nm">${esc(s)}</div>
+        ${isCur?'<span class="tag">現在</span>':''}
+      </div>`;}).join("")
+      + (cur>=stages.length?'<div class="step done"><div class="box">✓</div><div class="nm">すべて完了</div></div>':'');
+    g("stepper").querySelectorAll(".step[data-i]").forEach(el=>{
+      el.onclick=()=>{
+        const i=+el.dataset.i;
+        // その工程が完了済みなら「そこまで戻す」、未完了なら「そこまで完了にする」
+        d.stage = (i < d.stage) ? i : i+1;
+        drawStepper();
+      };
+    });
+  }
+  drawStepper();
 
   function readCur(){return {
     cost:num(g("f_cost").value)||0, price:num(F.price.value)||0,
@@ -546,6 +661,7 @@ function editVariant(p,v){
     d.price=num(F.price.value)||0;
     d.qty=num(F.qty.value)||0;
     d.total=F.total.value===""?"":(num(F.total.value)||0);
+    d.stage=+d.stage||0;
     if(!d.label && !d.orderQty && !d.qty){back.remove();return;}
     const i=p.variants.findIndex(x=>x.id===d.id);
     if(i>=0)p.variants[i]=d; else p.variants.push(d);
@@ -555,20 +671,64 @@ function editVariant(p,v){
 
 /* ---------- backup (export / import) ---------- */
 function openSettings(){
-  const back=mkSheet("バックアップ",`
-    <div class="hint" style="margin:0 0 16px;font-size:12.5px;line-height:1.6">
+  const back=mkSheet("設定",`
+    <button class="btn btn-primary" id="stg" style="width:100%;height:46px;margin-bottom:16px;background:rgba(34,211,238,.14);color:var(--cyan);border:1px solid rgba(34,211,238,.35)">⚙ 進捗ステータス（工程）を編集</button>
+    <div class="divlab" style="margin-top:0">バックアップ</div>
+    <div class="hint" style="margin:0 0 14px;font-size:12.5px;line-height:1.6">
       データはこの端末のブラウザ内（IndexedDB）だけに保存されています。<br>
       機種変更・アプリ削除・ブラウザのデータ消去で消えるので、ときどき書き出して保管してください。</div>
     <button class="btn btn-primary" id="exp" style="width:100%;height:46px;margin-bottom:10px">⬇ バックアップを書き出す</button>
     <label class="btn btn-ghost" id="impLbl" style="width:100%;height:46px">⬆ バックアップから復元
       <input type="file" accept="application/json,.json" id="impFile" hidden></label>
     <div class="hint" style="margin-top:14px;font-size:11.5px">復元すると、同じ商品は上書き・無い商品は追加されます（今のデータは消えません）。</div>`);
+  back.querySelector("#stg").onclick=()=>{back.remove();openStages();};
   back.querySelector("#exp").onclick=exportData;
   back.querySelector("#impFile").onchange=e=>{
     const f=e.target.files[0]; if(f)importData(f,back);};
 }
+
+/* ---------- 工程の編集（全商品共通） ---------- */
+function openStages(){
+  let draft=[...stages];
+  const back=mkSheet("進捗ステータス（工程）",`
+    <div class="hint" style="margin:0 0 14px;font-size:12.5px;line-height:1.6">
+      ここで決めた工程が<b>すべての商品・サイズ共通</b>で使われます。上から順に進みます。</div>
+    <div id="slist"></div>
+    <button class="btn btn-ghost" id="addStage" style="width:100%;height:42px;margin-top:6px">＋ 工程を追加</button>
+    <div class="actions" style="margin-top:16px">
+      <button class="btn btn-ghost" id="cancel">キャンセル</button>
+      <button class="btn btn-primary" style="flex:1;height:42px" id="save">保存</button>
+    </div>`);
+  const g=id=>back.querySelector("#"+id);
+  function draw(){
+    g("slist").innerHTML=draft.map((s,i)=>`
+      <div class="sedit">
+        <span class="ord">${i+1}</span>
+        <input type="text" value="${esc(s)}" data-i="${i}">
+        <button class="iconbtn" data-up="${i}">↑</button>
+        <button class="iconbtn" data-del="${i}">🗑</button>
+      </div>`).join("");
+    g("slist").querySelectorAll("input[data-i]").forEach(inp=>
+      inp.oninput=()=>{draft[+inp.dataset.i]=inp.value;});
+    g("slist").querySelectorAll("[data-up]").forEach(b=>b.onclick=()=>{
+      const i=+b.dataset.up; if(i===0)return;
+      [draft[i-1],draft[i]]=[draft[i],draft[i-1]]; draw();});
+    g("slist").querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+      const i=+b.dataset.del;
+      if(draft.length<=1){alert("工程は最低1つ必要です。");return;}
+      draft.splice(i,1); draw();});
+  }
+  draw();
+  g("addStage").onclick=()=>{draft.push("新しい工程");draw();};
+  g("cancel").onclick=()=>back.remove();
+  g("save").onclick=()=>{
+    const clean=draft.map(s=>s.trim()).filter(Boolean);
+    if(!clean.length){alert("工程は最低1つ必要です。");return;}
+    stages=clean; saveStages(); filterStage=null; render(); back.remove();
+  };
+}
 function exportData(){
-  const payload={app:"inv-mgr",version:1,exportedAt:new Date().toISOString(),products};
+  const payload={app:"inv-mgr",version:2,exportedAt:new Date().toISOString(),stages,products};
   const blob=new Blob([JSON.stringify(payload)],{type:"application/json"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
@@ -583,6 +743,9 @@ async function importData(file,back){
     const arr=Array.isArray(parsed)?parsed:parsed.products;
     if(!Array.isArray(arr))throw new Error("bad");
     if(!confirm(`${arr.length}件を取り込みます。よろしいですか？`))return;
+    if(Array.isArray(parsed.stages)&&parsed.stages.length){
+      stages=parsed.stages; saveStages();
+    }
     for(const p of arr){
       const prod=Array.isArray(p.variants)
         ? {id:p.id||uid(),name:p.name||"",image:p.image||"",variants:p.variants}
@@ -676,6 +839,7 @@ $("#sortBtn").onclick=()=>{sortIdx=(sortIdx+1)%SORTS.length;render();};
     }]};
   });
   if(changed)for(const p of products)await idbPut(p);
+  loadStages();
   loadExpanded();
   render();
 })();
