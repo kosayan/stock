@@ -169,6 +169,21 @@
     background:rgba(255,255,255,.05);color:var(--txt);font-size:13px;font-weight:700;
     font-variant-numeric:tabular-nums;-webkit-appearance:none;padding:0}
   .qlab{font-size:10.5px;color:var(--faint);flex:0 0 auto}
+  /* ---- メモ ---- */
+  .memo{margin-top:9px}
+  .memolab{font-size:10.5px;color:var(--faint);margin-bottom:4px;display:flex;
+    align-items:center;justify-content:space-between}
+  .memolab .saved{color:var(--emerald);opacity:0;transition:opacity .2s}
+  .memolab .saved.on{opacity:1}
+  .memoin{width:100%;min-height:96px;border-radius:10px;padding:9px 11px;
+    background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--txt);
+    font-size:13.5px;line-height:1.55;outline:none;resize:vertical;
+    font-family:inherit;-webkit-appearance:none}
+  .memoin:focus{border-color:rgba(34,211,238,.45);background:rgba(255,255,255,.06)}
+  .memoin::placeholder{color:var(--faint)}
+  /* 閉じているときのメモ痕跡 */
+  .memodot{font-size:11px;color:var(--faint);margin-top:6px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
   /* トースト */
   .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));
     transform:translateX(-50%);z-index:60;background:#1c2130;border:1px solid var(--line);
@@ -254,7 +269,7 @@
     <span>売れば <b class="num" id="sPotential">¥0</b>（売価ベース）</span>
   </div>
   <div class="toolbar">
-    <input class="search" id="q" placeholder="🔍 商品名・サイズで検索">
+    <input class="search" id="q" placeholder="🔍 商品名・サイズ・メモで検索">
     <button class="sortbtn" id="sortBtn">利益順 ▾</button>
   </div>
   <div class="filterbar" id="filterbar"></div>
@@ -419,7 +434,9 @@ function visibleProducts(){
     }
     if(q){
       if((p.name||"").toLowerCase().includes(q))return {...p,variants:vs};
-      const hit=vs.filter(v=>(v.label||"").toLowerCase().includes(q));
+      const hit=vs.filter(v=>
+        (v.label||"").toLowerCase().includes(q) ||
+        (v.memo||"").toLowerCase().includes(q));
       return hit.length?{...p,variants:hit}:null;
     }
     return vs===p.variants?p:{...p,variants:vs};
@@ -508,6 +525,11 @@ function render(){
     const bulk = pending.length>1
       ? `<button class="bulkbtn" data-a="bulk">☑ ${pending.length}件まとめて進める</button>`
       : "";
+    // 閉じていてもメモがあることが分かるように（最新の1件をプレビュー）
+    const memoV=p.variants.find(v=>(v.memo||"").trim());
+    const memoPeek = (!open && memoV)
+      ? `<div class="memodot">📝 ${esc(memoV.memo.trim().split("\n")[0])}</div>`
+      : "";
     card.innerHTML=`
       <div class="phead">
         ${thumb}
@@ -516,6 +538,7 @@ function render(){
           <div class="pstatus">${stChips}</div>
           <div class="pbar"><i style="width:${Math.round(t*100)}%"></i></div>
           <div class="pmeta num">${p.variants.length}種 ・ 在庫 ${s.stock}点</div>
+          ${memoPeek}
           ${bulk}
         </div>
         <div class="pright">
@@ -573,6 +596,14 @@ function render(){
               <button class="qbtn" data-q="qty" data-d="1">＋</button>
             </div>
             <div class="vchips" style="margin-top:8px">${stockChip}${costChip}${profitChip}</div>
+            <div class="memo">
+              <div class="memolab">
+                <span>メモ</span>
+                <span class="saved" data-m="saved">✓ 保存しました</span>
+              </div>
+              <textarea class="memoin" data-m="memo" rows="5"
+                placeholder="どこまで進んだか、業者とのやり取り、注意点など…">${esc(v.memo||"")}</textarea>
+            </div>
           </div>
           <div class="vright">
             <div class="vprice num ${c.price>0?'':'zero'}">${c.price>0?yen(c.price):"—"}</div>
@@ -584,6 +615,25 @@ function render(){
           </div>`;
         const nb=row.querySelector('[data-a="next"]');
         if(nb)nb.onclick=e=>{e.stopPropagation();advanceVariant(p,v);};
+
+        // メモ：入力が止まったら自動保存（再描画しないのでカーソルは飛ばない）
+        const ta=row.querySelector('[data-m="memo"]');
+        const savedTag=row.querySelector('[data-m="saved"]');
+        let memoTimer=null;
+        ta.onclick=e=>e.stopPropagation();
+        ta.oninput=()=>{
+          clearTimeout(memoTimer);
+          memoTimer=setTimeout(async()=>{
+            v.memo=ta.value;
+            await persist(p);
+            savedTag.classList.add("on");
+            setTimeout(()=>savedTag.classList.remove("on"),1400);
+          },600);
+        };
+        ta.onblur=async()=>{
+          clearTimeout(memoTimer);
+          if(v.memo!==ta.value){v.memo=ta.value;await persist(p);}
+        };
         row.querySelectorAll("[data-q]").forEach(b=>b.onclick=e=>{e.stopPropagation();
           bumpQty(p,v,b.dataset.q,+b.dataset.d);});
         row.querySelectorAll("[data-f]").forEach(inp=>{
@@ -882,6 +932,7 @@ function editVariant(p,v){
     d.qty=num(F.qty.value)||0;
     d.total=F.total.value===""?"":(num(F.total.value)||0);
     d.stage=+d.stage||0;
+    d.memo=d.memo||"";
     if(!d.label && !d.orderQty && !d.qty){back.remove();return;}
     const i=p.variants.findIndex(x=>x.id===d.id);
     if(i>=0)p.variants[i]=d; else p.variants.push(d);
