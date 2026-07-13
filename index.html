@@ -982,19 +982,29 @@ function openSettings(){
   // BASE CSV
   const tplState=back.querySelector("#tplState");
   if(loadBaseHeader())tplState.textContent="✓ 列名を読み込み済み（再読込するにはタップ）";
-  back.querySelector("#baseTpl").onchange=async e=>{
+  back.querySelector("#baseTpl").onchange=e=>{
     const f=e.target.files[0]; if(!f)return;
-    try{
-      const text=await f.text();
-      const first=text.split(/\r?\n/).find(l=>l.trim());
-      if(!first)throw new Error("empty");
-      const cols=parseCsvLine(first);
-      if(cols.length<3)throw new Error("bad");
-      saveBaseHeader(first);
-      tplState.textContent=`✓ 列名を読み込みました（${cols.length}列）`;
-    }catch(err){
-      alert("CSVを読み込めませんでした。BASEからダウンロードした空のCSVを選んでください。");
-    }
+    const rd=new FileReader();
+    rd.onload=()=>{
+      try{
+        const text=String(rd.result||"");
+        const first=text.split(/\r?\n/).map(l=>l.trim()).find(l=>l.length>0);
+        if(!first)throw new Error("空のファイルです");
+        const cols=parseCsvLine(first);
+        if(cols.length<3)throw new Error("列が少なすぎます（"+cols.length+"列）");
+        // 必須列があるか確認
+        if(matchCol(cols,["商品名"])<0)
+          throw new Error("「商品名」列が見つかりません");
+        saveBaseHeader(first);
+        tplState.textContent=`✓ 列名を読み込みました（${cols.length}列）`;
+        toast("BASEの列名を記憶しました");
+      }catch(err){
+        alert("CSVを読み込めませんでした。\n"+(err.message||"")+
+          "\n\nBASEの「商品を新規登録するための空のCSVファイル」を選んでください。");
+      }
+    };
+    rd.onerror=()=>alert("ファイルを読み込めませんでした。");
+    rd.readAsText(f);
   };
   back.querySelector("#baseExp").onclick=exportBaseCsv;
   back.querySelector("#impFile").onchange=e=>{
@@ -1108,20 +1118,12 @@ const csvCell=v=>{
   return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
 };
 
-// 列名を柔軟に照合（表記ゆれに強くする）
+// 列名を照合。完全一致を最優先し、部分一致は誤爆しやすいので使わない。
 function matchCol(header,keys){
-  const norm=s=>s.replace(/[\s　]/g,"").toLowerCase();
-  for(let i=0;i<header.length;i++){
-    const h=norm(header[i]);
-    for(const k of keys){
-      if(h===norm(k))return i;
-    }
-  }
-  // 部分一致でフォールバック
-  for(let i=0;i<header.length;i++){
-    const h=norm(header[i]);
-    for(const k of keys){
-      if(h.includes(norm(k)))return i;
+  const norm=s=>String(s).replace(/[\s　"']/g,"").toLowerCase();
+  for(const k of keys){
+    for(let i=0;i<header.length;i++){
+      if(norm(header[i])===norm(k))return i;
     }
   }
   return -1;
