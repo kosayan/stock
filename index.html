@@ -134,6 +134,19 @@
   .fchip{flex:0 0 auto;font-size:12px;padding:7px 12px;border-radius:20px;cursor:pointer;
     background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--sub);white-space:nowrap}
   .fchip.on{background:rgba(34,211,238,.15);border-color:rgba(34,211,238,.4);color:var(--cyan);font-weight:700}
+  /* ---- 進捗の遅れを色で示す（赤=遅れ / 黄=進行中 / 緑=完了） ---- */
+  .pcard{border-left:3px solid var(--prog,#64748b)}
+  .phead{border-left:none !important;
+    background:linear-gradient(90deg,var(--progbg,rgba(148,163,184,.06)),rgba(0,0,0,0) 50%)}
+  .pstatus{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+  .pst{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:700;white-space:nowrap;
+    background:var(--c-bg);color:var(--c-fg);border:1px solid var(--c-bd);
+    display:inline-flex;align-items:center;gap:4px}
+  .pst .n{opacity:.7;font-weight:600}
+  /* mini progress bar under product name */
+  .pbar{height:4px;border-radius:20px;background:rgba(255,255,255,.07);
+    overflow:hidden;margin-top:8px;display:flex}
+  .pbar i{height:100%;display:block;background:var(--prog,#64748b)}
   .empty{border:1px dashed rgba(255,255,255,.12);border-radius:14px;padding:56px 20px;text-align:center;color:var(--sub)}
   .empty .big{font-size:30px;margin-bottom:10px}
   .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);
@@ -268,6 +281,48 @@ const stageName=v=>{const i=curStageIdx(v);
   return i>=stages.length?"完了":stages[i];};
 const isComplete=v=>curStageIdx(v)>=stages.length;
 
+/* 進捗率(0=未着手 … 1=完了) */
+const vProg=v=>stages.length?curStageIdx(v)/stages.length:0;
+// 商品の進捗＝一番遅れているバリアント（遅れを埋もれさせない）
+function pProg(p){
+  if(!p.variants.length)return 0;
+  return Math.min(...p.variants.map(vProg));
+}
+
+/* ---- 相対評価で色を決める ----
+   全商品を出荷する前提なので、絶対的な工程位置ではなく
+   「他と比べて遅れているか」で色を出す。
+   全体が同じ進捗なら差が無い＝全部同じ色（オレンジ〜黄）になる。 */
+let progScale={min:0,max:0};
+function updateProgScale(){
+  const ps=products.filter(p=>p.variants.length).map(pProg);
+  progScale = ps.length
+    ? {min:Math.min(...ps), max:Math.max(...ps)}
+    : {min:0,max:0};
+}
+// 相対位置 → 0(最も遅れ) 〜 1(最も進んでいる)
+function relPos(t){
+  const {min,max}=progScale;
+  const span=max-min;
+  if(span<0.001)return 0.5;  // 全員横並び → 中間色（オレンジ〜黄）
+  const r=(t-min)/span;
+  // 差が小さいときは色の振れ幅も抑える（1工程差で真っ赤にならないように）
+  // span=1工程分なら±0.5程度、大きく開くほどフルレンジに近づく
+  const spread=Math.min(1, span*2);
+  return 0.5 + (r-0.5)*spread;
+}
+/* 相対位置 → 色。0=赤 / 0.5=オレンジ〜黄 / 1=黄緑。完了だけ緑 */
+function progColor(t,done){
+  if(done)return {fg:"#6ee7b7",bg:"rgba(110,231,183,.13)",bd:"rgba(110,231,183,.3)"};
+  const r=Math.max(0,Math.min(1,relPos(t)));
+  const hue=Math.round(r*75);   // 0=赤 → 37=オレンジ/黄 → 75=黄緑
+  return {
+    fg:`hsl(${hue},92%,66%)`,
+    bg:`hsla(${hue},92%,60%,.14)`,
+    bd:`hsla(${hue},92%,60%,.32)`
+  };
+}
+
 /* ---------- variant math ---------- */
 function vcalc(v){
   const cost=+v.cost||0, price=+v.price||0, qty=+v.qty||0;
@@ -283,6 +338,7 @@ function vcalc(v){
 
 /* ---------- render ---------- */
 const SORTS=[
+  {k:"delay", label:"遅れ順"},
   {k:"profit",label:"利益順"},
   {k:"stockval",label:"在庫金額順"},
   {k:"stock",  label:"在庫少順"},
@@ -340,6 +396,11 @@ function visibleProducts(){
 
   const s=SORTS[sortIdx].k;
   arr=[...arr].sort((x,y)=>{
+    if(s==="delay"){
+      const d=pProg(x)-pProg(y);
+      if(d!==0)return d;                        // 遅れているものが先頭
+      return (x.name||"").localeCompare(y.name||"","ja");
+    }
     if(s==="name")return (x.name||"").localeCompare(y.name||"","ja");
     if(s==="stock")return psum(x).stock-psum(y).stock;
     if(s==="stockval")return psum(y).stockVal-psum(x).stockVal;
@@ -364,6 +425,7 @@ function render(){
   $("#sStock").textContent=stock;
   $("#sPotential").textContent=yen(potential);
   $("#sortBtn").textContent=SORTS[sortIdx].label+" ▾";
+  updateProgScale();
   renderFilters();
 
   const list=$("#list");
@@ -384,8 +446,29 @@ function render(){
     const open=!!expanded[p.id];
     const card=document.createElement("div");
     card.className="pcard"+(open?" open":"");
+
+    // --- 進捗の色（他商品との相対評価） ---
+    const t=pProg(p);
+    const allDone=p.variants.length>0 && p.variants.every(isComplete);
+    const col=progColor(t,allDone);
+    card.style.setProperty("--prog",col.fg);
+    card.style.setProperty("--progbg",col.bg);
+
+    // --- 閉じていても見えるステータス表示 ---
+    const byStage=new Map();
+    p.variants.forEach(v=>{
+      const i=isComplete(v)?stages.length:curStageIdx(v);
+      byStage.set(i,(byStage.get(i)||0)+1);
+    });
+    const stChips=[...byStage.entries()].sort((a,b)=>a[0]-b[0]).map(([i,n])=>{
+      const done=i>=stages.length;
+      const c=progColor(stages.length?i/stages.length:0, done);
+      const nm=done?"完了":stages[i];
+      return `<span class="pst" style="--c-fg:${c.fg};--c-bg:${c.bg};--c-bd:${c.bd}">
+        ${esc(nm)}${p.variants.length>1?`<span class="n">${n}</span>`:""}</span>`;
+    }).join("");
+
     const thumb=p.image?`<img class="thumb" src="${p.image}">`:`<div class="thumb">📦</div>`;
-    // 親は「在庫金額」を主役に。売れていれば利益も。
     const headVal = s.profit!==0 ? yen(s.profit) : yen(s.stockVal);
     const headLab = s.profit!==0 ? "利益" : "在庫金額";
     const headCls = s.profit<0?"pink":s.profit>0?"cyan":(s.stockVal>0?"":"zero");
@@ -394,6 +477,8 @@ function render(){
         ${thumb}
         <div class="pinfo">
           <div class="pname">${esc(p.name||"（無名）")}</div>
+          <div class="pstatus">${stChips}</div>
+          <div class="pbar"><i style="width:${Math.round(t*100)}%"></i></div>
           <div class="pmeta num">${p.variants.length}種 ・ 在庫 ${s.stock}点</div>
         </div>
         <div class="pright">
@@ -421,10 +506,8 @@ function render(){
           ? `<span class="chip ${c.profit<0?'low':'good'}">利益 ${yen(c.profit)}</span>`:"";
 
         const row=document.createElement("div");row.className="vrow";
-        const si=curStageIdx(v);
-        const done=isComplete(v);
-        const stCls=done?"done":si>0?"active":"";
-        const stChip=`<span class="stchip ${stCls}"><span class="stdot"></span>${esc(stageName(v))}</span>`;
+        const vc=progColor(vProg(v), isComplete(v));
+        const stChip=`<span class="stchip" style="background:${vc.bg};color:${vc.fg};border-color:${vc.bd}"><span class="stdot"></span>${esc(stageName(v))}</span>`;
         row.innerHTML=`
           <div class="vleft">
             <div class="vlabel">${esc(v.label||"（無名）")}</div>
@@ -672,7 +755,8 @@ function editVariant(p,v){
 /* ---------- backup (export / import) ---------- */
 function openSettings(){
   const back=mkSheet("設定",`
-    <button class="btn btn-primary" id="stg" style="width:100%;height:46px;margin-bottom:16px;background:rgba(34,211,238,.14);color:var(--cyan);border:1px solid rgba(34,211,238,.35)">⚙ 進捗ステータス（工程）を編集</button>
+    <button class="btn btn-primary" id="stg" style="width:100%;height:46px;margin-bottom:10px;background:rgba(34,211,238,.14);color:var(--cyan);border:1px solid rgba(34,211,238,.35)">⚙ 進捗ステータス（工程）を編集</button>
+    <button class="btn btn-ghost" id="upd" style="width:100%;height:46px;margin-bottom:16px">🔄 アプリを最新に更新</button>
     <div class="divlab" style="margin-top:0">バックアップ</div>
     <div class="hint" style="margin:0 0 14px;font-size:12.5px;line-height:1.6">
       データはこの端末のブラウザ内（IndexedDB）だけに保存されています。<br>
@@ -682,6 +766,21 @@ function openSettings(){
       <input type="file" accept="application/json,.json" id="impFile" hidden></label>
     <div class="hint" style="margin-top:14px;font-size:11.5px">復元すると、同じ商品は上書き・無い商品は追加されます（今のデータは消えません）。</div>`);
   back.querySelector("#stg").onclick=()=>{back.remove();openStages();};
+  back.querySelector("#upd").onclick=async()=>{
+    const btn=back.querySelector("#upd");
+    btn.textContent="更新中…"; btn.disabled=true;
+    try{
+      if("caches" in window){
+        const keys=await caches.keys();
+        await Promise.all(keys.map(k=>caches.delete(k)));
+      }
+      if("serviceWorker" in navigator){
+        const regs=await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r=>r.unregister()));
+      }
+    }catch(e){}
+    location.reload(true);
+  };
   back.querySelector("#exp").onclick=exportData;
   back.querySelector("#impFile").onchange=e=>{
     const f=e.target.files[0]; if(f)importData(f,back);};
