@@ -987,14 +987,22 @@ function openSettings(){
     const rd=new FileReader();
     rd.onload=()=>{
       try{
-        const text=String(rd.result||"");
-        const first=text.split(/\r?\n/).map(l=>l.trim()).find(l=>l.length>0);
+        const buf=rd.result;
+        // 文字コードを自動判定：UTF-8で読んで日本語列が見つからなければShift_JISで読み直す
+        let text=new TextDecoder("utf-8").decode(buf);
+        let first=pickHeader(text);
+        if(!first || matchCol(parseCsvLine(first),["商品名"])<0){
+          try{
+            const sj=new TextDecoder("shift_jis").decode(buf);
+            const f2=pickHeader(sj);
+            if(f2 && matchCol(parseCsvLine(f2),["商品名"])>=0){ text=sj; first=f2; }
+          }catch(_){}
+        }
         if(!first)throw new Error("空のファイルです");
         const cols=parseCsvLine(first);
-        if(cols.length<3)throw new Error("列が少なすぎます（"+cols.length+"列）");
-        // 必須列があるか確認
-        if(matchCol(cols,["商品名"])<0)
-          throw new Error("「商品名」列が見つかりません");
+        if(matchCol(cols,["商品名"])<0){
+          throw new Error("「商品名」列が見つかりません。\n読み取れた列: "+cols.slice(0,5).join(" / "));
+        }
         saveBaseHeader(first);
         tplState.textContent=`✓ 列名を読み込みました（${cols.length}列）`;
         toast("BASEの列名を記憶しました");
@@ -1004,7 +1012,7 @@ function openSettings(){
       }
     };
     rd.onerror=()=>alert("ファイルを読み込めませんでした。");
-    rd.readAsText(f);
+    rd.readAsArrayBuffer(f);
   };
   back.querySelector("#baseExp").onclick=exportBaseCsv;
   back.querySelector("#impFile").onchange=e=>{
@@ -1117,6 +1125,12 @@ const csvCell=v=>{
   const s=String(v??"");
   return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
 };
+
+// テキストから先頭の有効行（ヘッダー）を取り出す
+function pickHeader(text){
+  return String(text||"").replace(/^\ufeff/,"")
+    .split(/\r?\n/).map(l=>l.trim()).find(l=>l.length>0) || "";
+}
 
 // 列名を照合。完全一致を最優先し、部分一致は誤爆しやすいので使わない。
 function matchCol(header,keys){
