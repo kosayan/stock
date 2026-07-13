@@ -147,6 +147,38 @@
   .pbar{height:4px;border-radius:20px;background:rgba(255,255,255,.07);
     overflow:hidden;margin-top:8px;display:flex}
   .pbar i{height:100%;display:block;background:var(--prog,#64748b)}
+  /* ---- 一覧から直接ステータスを進める ---- */
+  .stchip{cursor:pointer}
+  .stchip:active{filter:brightness(1.3)}
+  .nextbtn{border:none;border-radius:8px;padding:6px 10px;font-size:11.5px;font-weight:800;
+    background:var(--c-bg,rgba(34,211,238,.14));color:var(--c-fg,var(--cyan));
+    border:1px solid var(--c-bd,rgba(34,211,238,.35));cursor:pointer;white-space:nowrap;
+    display:inline-flex;align-items:center;gap:4px}
+  .nextbtn:active{filter:brightness(1.35)}
+  .nextbtn:disabled{opacity:.35;cursor:default}
+  /* 商品ヘッダの一括進行 */
+  .bulkbtn{border:none;border-radius:9px;padding:7px 11px;font-size:11.5px;font-weight:800;
+    background:rgba(255,255,255,.07);color:var(--sub);border:1px solid var(--line);
+    cursor:pointer;white-space:nowrap;margin-top:8px}
+  .bulkbtn:active{background:rgba(255,255,255,.14)}
+  /* 数値クイック編集 */
+  .qty{display:flex;align-items:center;gap:6px;margin-top:7px}
+  .qbtn{width:26px;height:26px;border-radius:7px;border:1px solid var(--line);flex:0 0 auto;
+    background:rgba(255,255,255,.05);color:var(--sub);font-size:14px;font-weight:800;cursor:pointer}
+  .qbtn:active{background:rgba(255,255,255,.14)}
+  .qin{width:52px;height:26px;border-radius:7px;border:1px solid var(--line);text-align:center;
+    background:rgba(255,255,255,.05);color:var(--txt);font-size:13px;font-weight:700;
+    font-variant-numeric:tabular-nums;-webkit-appearance:none}
+  .qlab{font-size:10.5px;color:var(--faint)}
+  /* トースト */
+  .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));
+    transform:translateX(-50%);z-index:60;background:#1c2130;border:1px solid var(--line);
+    color:var(--txt);padding:11px 16px;border-radius:12px;font-size:13px;font-weight:700;
+    box-shadow:0 8px 30px rgba(0,0,0,.5);display:flex;align-items:center;gap:12px;
+    animation:tin .2s ease both;max-width:calc(100% - 32px)}
+  @keyframes tin{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+  .toast button{background:none;border:none;color:var(--cyan);font-weight:800;font-size:13px;
+    cursor:pointer;flex:0 0 auto}
   .empty{border:1px dashed rgba(255,255,255,.12);border-radius:14px;padding:56px 20px;text-align:center;color:var(--sub)}
   .empty .big{font-size:30px;margin-bottom:10px}
   .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);
@@ -472,6 +504,10 @@ function render(){
     const headVal = s.profit!==0 ? yen(s.profit) : yen(s.stockVal);
     const headLab = s.profit!==0 ? "利益" : "在庫金額";
     const headCls = s.profit<0?"pink":s.profit>0?"cyan":(s.stockVal>0?"":"zero");
+    const pending=p.variants.filter(v=>(+v.stage||0)<stages.length);
+    const bulk = pending.length
+      ? `<button class="bulkbtn" data-a="bulk">✓ ${pending.length}件まとめて進める</button>`
+      : "";
     card.innerHTML=`
       <div class="phead">
         ${thumb}
@@ -480,6 +516,7 @@ function render(){
           <div class="pstatus">${stChips}</div>
           <div class="pbar"><i style="width:${Math.round(t*100)}%"></i></div>
           <div class="pmeta num">${p.variants.length}種 ・ 在庫 ${s.stock}点</div>
+          ${bulk}
         </div>
         <div class="pright">
           <div class="pval num ${headCls}">${headVal}</div>
@@ -487,6 +524,8 @@ function render(){
         </div>
         <span class="caret">${open?"▾":"▸"}</span>
       </div>`;
+    const bb=card.querySelector('[data-a="bulk"]');
+    if(bb)bb.onclick=e=>{e.stopPropagation();advanceProduct(p);};
     card.querySelector(".phead").onclick=()=>{expanded[p.id]=!open;saveExpanded();render();};
 
     if(open){
@@ -501,17 +540,33 @@ function render(){
           : c.stock<=5 ? `<span class="chip warn">在庫 ${c.stock}</span>`
           : `<span class="chip good">在庫 ${c.stock}</span>`;
         const costChip = c.cost>0?`<span class="chip">原価 ${yen(c.cost)}</span>`:"";
-        const soldChip = c.qty>0?`<span class="chip">販売 ${c.qty}</span>`:"";
         const profitChip = c.profit!==0
           ? `<span class="chip ${c.profit<0?'low':'good'}">利益 ${yen(c.profit)}</span>`:"";
 
         const row=document.createElement("div");row.className="vrow";
         const vc=progColor(vProg(v), isComplete(v));
+        const done=isComplete(v);
+        const nextName=done?null:(curStageIdx(v)+1>=stages.length?"完了":stages[curStageIdx(v)+1]);
         const stChip=`<span class="stchip" style="background:${vc.bg};color:${vc.fg};border-color:${vc.bd}"><span class="stdot"></span>${esc(stageName(v))}</span>`;
+        const nextBtn=done
+          ? `<button class="nextbtn" disabled style="--c-bg:rgba(110,231,183,.1);--c-fg:var(--emerald);--c-bd:rgba(110,231,183,.25)">✓ 完了</button>`
+          : `<button class="nextbtn" data-a="next" style="--c-bg:${vc.bg};--c-fg:${vc.fg};--c-bd:${vc.bd}">✓ ${esc(nextName)}へ</button>`;
+
         row.innerHTML=`
           <div class="vleft">
             <div class="vlabel">${esc(v.label||"（無名）")}</div>
-            <div class="vchips">${stChip}${stockChip}${costChip}${soldChip}${profitChip}</div>
+            <div class="vchips">${stChip}${nextBtn}</div>
+            <div class="qty">
+              <span class="qlab">発注</span>
+              <button class="qbtn" data-q="orderQty" data-d="-10">−</button>
+              <input class="qin" type="number" inputmode="numeric" data-f="orderQty" value="${c.orderQty||0}">
+              <button class="qbtn" data-q="orderQty" data-d="10">＋</button>
+              <span class="qlab" style="margin-left:6px">販売</span>
+              <button class="qbtn" data-q="qty" data-d="-1">−</button>
+              <input class="qin" type="number" inputmode="numeric" data-f="qty" value="${c.qty||0}">
+              <button class="qbtn" data-q="qty" data-d="1">＋</button>
+            </div>
+            <div class="vchips" style="margin-top:7px">${stockChip}${costChip}${profitChip}</div>
           </div>
           <div class="vright">
             <div class="vprice num ${c.price>0?'':'zero'}">${c.price>0?yen(c.price):"—"}</div>
@@ -521,6 +576,14 @@ function render(){
             <button class="iconbtn" data-a="ev">✎</button>
             <button class="iconbtn" data-a="dv">🗑</button>
           </div>`;
+        const nb=row.querySelector('[data-a="next"]');
+        if(nb)nb.onclick=e=>{e.stopPropagation();advanceVariant(p,v);};
+        row.querySelectorAll("[data-q]").forEach(b=>b.onclick=e=>{e.stopPropagation();
+          bumpQty(p,v,b.dataset.q,+b.dataset.d);});
+        row.querySelectorAll("[data-f]").forEach(inp=>{
+          inp.onclick=e=>e.stopPropagation();
+          inp.onchange=e=>{e.stopPropagation();setQty(p,v,inp.dataset.f,inp.value);};
+        });
         row.querySelector('[data-a="ev"]').onclick=e=>{e.stopPropagation();editVariant(p,v);};
         row.querySelector('[data-a="dv"]').onclick=e=>{e.stopPropagation();
           if(confirm(`「${v.label||"このバリアント"}」を削除しますか？`))delVariant(p,v.id);};
@@ -570,6 +633,60 @@ async function persist(p){const i=products.findIndex(x=>x.id===p.id);
   if(i>=0)products[i]=p; else products.push(p); await idbPut(p);}
 async function delProduct(id){products=products.filter(p=>p.id!==id);await idbDel(id);render();}
 async function delVariant(p,vid){p.variants=p.variants.filter(v=>v.id!==vid);await persist(p);render();}
+
+/* ---------- ステータス進行（一覧から直接） ---------- */
+let toastEl=null;
+function toast(msg,undo){
+  if(toastEl)toastEl.remove();
+  toastEl=document.createElement("div");
+  toastEl.className="toast";
+  toastEl.innerHTML=`<span>${esc(msg)}</span>`;
+  if(undo){
+    const b=document.createElement("button");
+    b.textContent="取り消し";
+    b.onclick=()=>{undo();toastEl.remove();toastEl=null;};
+    toastEl.appendChild(b);
+  }
+  document.body.appendChild(toastEl);
+  const el=toastEl;
+  setTimeout(()=>{if(el===toastEl){el.remove();toastEl=null;}},4000);
+}
+
+// 1バリアントを次の工程へ
+async function advanceVariant(p,v){
+  const before=+v.stage||0;
+  if(before>=stages.length)return;
+  v.stage=before+1;
+  await persist(p); render();
+  const nm=v.stage>=stages.length?"完了":stages[v.stage];
+  toast(`${v.label||"バリアント"} → ${nm}`,async()=>{
+    v.stage=before; await persist(p); render();
+  });
+}
+
+// 商品内の全バリアントをまとめて次へ（一番遅れているものに合わせて全部進める）
+async function advanceProduct(p){
+  const targets=p.variants.filter(v=>(+v.stage||0)<stages.length);
+  if(!targets.length)return;
+  const before=p.variants.map(v=>+v.stage||0);
+  targets.forEach(v=>{v.stage=(+v.stage||0)+1;});
+  await persist(p); render();
+  toast(`${p.name||"商品"} の ${targets.length}件を進めました`,async()=>{
+    p.variants.forEach((v,i)=>{v.stage=before[i];});
+    await persist(p); render();
+  });
+}
+
+// 在庫・販売数のクイック編集
+async function bumpQty(p,v,field,delta){
+  const cur=+v[field]||0;
+  v[field]=Math.max(0,cur+delta);
+  await persist(p); render();
+}
+async function setQty(p,v,field,val){
+  v[field]=Math.max(0,+val||0);
+  await persist(p); render();
+}
 
 /* ---------- product editor ---------- */
 function editProduct(p){
