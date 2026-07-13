@@ -106,12 +106,6 @@
     border:1px solid var(--line);color:var(--sub);font-size:12.5px;white-space:nowrap;cursor:pointer}
   .sortbtn:active{background:rgba(255,255,255,.1)}
   /* ---- status ---- */
-  .stchip{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:700;
-    background:rgba(148,163,184,.15);color:#cbd5e1;white-space:nowrap;
-    display:inline-flex;align-items:center;gap:4px;border:1px solid transparent}
-  .stchip.done{background:rgba(110,231,183,.14);color:var(--emerald);border-color:rgba(110,231,183,.3)}
-  .stchip.active{background:rgba(34,211,238,.14);color:var(--cyan);border-color:rgba(34,211,238,.35)}
-  .stdot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto}
   /* stepper in variant editor */
   .stepper{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;
     padding:6px;margin-bottom:12px}
@@ -139,37 +133,42 @@
   .phead{border-left:none !important;
     background:linear-gradient(90deg,var(--progbg,rgba(148,163,184,.06)),rgba(0,0,0,0) 50%)}
   .pstatus{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
-  .pst{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:700;white-space:nowrap;
+  .pst{font-size:12.5px;padding:4px 10px;border-radius:20px;font-weight:800;white-space:nowrap;
     background:var(--c-bg);color:var(--c-fg);border:1px solid var(--c-bd);
-    display:inline-flex;align-items:center;gap:4px}
-  .pst .n{opacity:.7;font-weight:600}
+    display:inline-flex;align-items:center;gap:5px}
+  .pst.tappable{cursor:pointer}
+  .pst.tappable:active{filter:brightness(1.35)}
+  .pst .n{opacity:.65;font-weight:700}
   /* mini progress bar under product name */
   .pbar{height:4px;border-radius:20px;background:rgba(255,255,255,.07);
     overflow:hidden;margin-top:8px;display:flex}
   .pbar i{height:100%;display:block;background:var(--prog,#64748b)}
-  /* ---- 一覧から直接ステータスを進める ---- */
-  .stchip{cursor:pointer}
+  /* ---- ステータスチップ（頭のチェックボックスで次へ進む） ---- */
+  .stchip{font-size:13px;padding:6px 12px 6px 7px;border-radius:20px;font-weight:800;
+    background:var(--c-bg);color:var(--c-fg);border:1px solid var(--c-bd);
+    display:inline-flex;align-items:center;gap:8px;white-space:nowrap;cursor:pointer}
   .stchip:active{filter:brightness(1.3)}
-  .nextbtn{border:none;border-radius:8px;padding:6px 10px;font-size:11.5px;font-weight:800;
-    background:var(--c-bg,rgba(34,211,238,.14));color:var(--c-fg,var(--cyan));
-    border:1px solid var(--c-bd,rgba(34,211,238,.35));cursor:pointer;white-space:nowrap;
-    display:inline-flex;align-items:center;gap:4px}
-  .nextbtn:active{filter:brightness(1.35)}
-  .nextbtn:disabled{opacity:.35;cursor:default}
+  .stbox{width:20px;height:20px;border-radius:6px;flex:0 0 auto;display:grid;place-items:center;
+    border:1.5px solid currentColor;background:rgba(0,0,0,.25);
+    font-size:12px;font-weight:900;color:transparent;transition:.12s}
+  .stchip:active .stbox{background:currentColor;color:#0d0f14}
+  .stchip.done{cursor:default}
+  .stchip.done .stbox{background:currentColor;color:#0d0f14}
+  .stnext{font-size:10.5px;font-weight:600;opacity:.6;margin-left:2px}
   /* 商品ヘッダの一括進行 */
   .bulkbtn{border:none;border-radius:9px;padding:7px 11px;font-size:11.5px;font-weight:800;
     background:rgba(255,255,255,.07);color:var(--sub);border:1px solid var(--line);
     cursor:pointer;white-space:nowrap;margin-top:8px}
   .bulkbtn:active{background:rgba(255,255,255,.14)}
   /* 数値クイック編集 */
-  .qty{display:flex;align-items:center;gap:6px;margin-top:7px}
-  .qbtn{width:26px;height:26px;border-radius:7px;border:1px solid var(--line);flex:0 0 auto;
-    background:rgba(255,255,255,.05);color:var(--sub);font-size:14px;font-weight:800;cursor:pointer}
+  .qty{display:flex;align-items:center;gap:5px;margin-top:8px}
+  .qbtn{width:28px;height:28px;border-radius:7px;border:1px solid var(--line);flex:0 0 auto;
+    background:rgba(255,255,255,.05);color:var(--sub);font-size:15px;font-weight:800;cursor:pointer}
   .qbtn:active{background:rgba(255,255,255,.14)}
-  .qin{width:52px;height:26px;border-radius:7px;border:1px solid var(--line);text-align:center;
+  .qin{width:50px;height:28px;border-radius:7px;border:1px solid var(--line);text-align:center;
     background:rgba(255,255,255,.05);color:var(--txt);font-size:13px;font-weight:700;
-    font-variant-numeric:tabular-nums;-webkit-appearance:none}
-  .qlab{font-size:10.5px;color:var(--faint)}
+    font-variant-numeric:tabular-nums;-webkit-appearance:none;padding:0}
+  .qlab{font-size:10.5px;color:var(--faint);flex:0 0 auto}
   /* トースト */
   .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));
     transform:translateX(-50%);z-index:60;background:#1c2130;border:1px solid var(--line);
@@ -496,8 +495,9 @@ function render(){
       const done=i>=stages.length;
       const c=progColor(stages.length?i/stages.length:0, done);
       const nm=done?"完了":stages[i];
-      return `<span class="pst" style="--c-fg:${c.fg};--c-bg:${c.bg};--c-bd:${c.bd}">
-        ${esc(nm)}${p.variants.length>1?`<span class="n">${n}</span>`:""}</span>`;
+      const tap=done?"":` data-adv="${i}"`;
+      return `<span class="pst${done?'':' tappable'}"${tap} style="--c-fg:${c.fg};--c-bg:${c.bg};--c-bd:${c.bd}">
+        ${done?"✓ ":"☐ "}${esc(nm)}${p.variants.length>1?`<span class="n">${n}</span>`:""}</span>`;
     }).join("");
 
     const thumb=p.image?`<img class="thumb" src="${p.image}">`:`<div class="thumb">📦</div>`;
@@ -505,8 +505,8 @@ function render(){
     const headLab = s.profit!==0 ? "利益" : "在庫金額";
     const headCls = s.profit<0?"pink":s.profit>0?"cyan":(s.stockVal>0?"":"zero");
     const pending=p.variants.filter(v=>(+v.stage||0)<stages.length);
-    const bulk = pending.length
-      ? `<button class="bulkbtn" data-a="bulk">✓ ${pending.length}件まとめて進める</button>`
+    const bulk = pending.length>1
+      ? `<button class="bulkbtn" data-a="bulk">☑ ${pending.length}件まとめて進める</button>`
       : "";
     card.innerHTML=`
       <div class="phead">
@@ -526,6 +526,9 @@ function render(){
       </div>`;
     const bb=card.querySelector('[data-a="bulk"]');
     if(bb)bb.onclick=e=>{e.stopPropagation();advanceProduct(p);};
+    card.querySelectorAll("[data-adv]").forEach(el=>{
+      el.onclick=e=>{e.stopPropagation();advanceStage(p,+el.dataset.adv);};
+    });
     card.querySelector(".phead").onclick=()=>{expanded[p.id]=!open;saveExpanded();render();};
 
     if(open){
@@ -547,26 +550,29 @@ function render(){
         const vc=progColor(vProg(v), isComplete(v));
         const done=isComplete(v);
         const nextName=done?null:(curStageIdx(v)+1>=stages.length?"完了":stages[curStageIdx(v)+1]);
-        const stChip=`<span class="stchip" style="background:${vc.bg};color:${vc.fg};border-color:${vc.bd}"><span class="stdot"></span>${esc(stageName(v))}</span>`;
-        const nextBtn=done
-          ? `<button class="nextbtn" disabled style="--c-bg:rgba(110,231,183,.1);--c-fg:var(--emerald);--c-bd:rgba(110,231,183,.25)">✓ 完了</button>`
-          : `<button class="nextbtn" data-a="next" style="--c-bg:${vc.bg};--c-fg:${vc.fg};--c-bd:${vc.bd}">✓ ${esc(nextName)}へ</button>`;
+        // 現在地のチップ。頭のチェックボックスを押すと次の工程へ。
+        const stChip=done
+          ? `<span class="stchip done" style="--c-bg:${vc.bg};--c-fg:${vc.fg};--c-bd:${vc.bd}">
+               <span class="stbox">✓</span>完了</span>`
+          : `<span class="stchip" data-a="next" style="--c-bg:${vc.bg};--c-fg:${vc.fg};--c-bd:${vc.bd}">
+               <span class="stbox">✓</span>${esc(stageName(v))}
+               <span class="stnext">→ ${esc(nextName)}</span></span>`;
 
         row.innerHTML=`
           <div class="vleft">
             <div class="vlabel">${esc(v.label||"（無名）")}</div>
-            <div class="vchips">${stChip}${nextBtn}</div>
+            <div class="vchips">${stChip}</div>
             <div class="qty">
               <span class="qlab">発注</span>
               <button class="qbtn" data-q="orderQty" data-d="-10">−</button>
               <input class="qin" type="number" inputmode="numeric" data-f="orderQty" value="${c.orderQty||0}">
               <button class="qbtn" data-q="orderQty" data-d="10">＋</button>
-              <span class="qlab" style="margin-left:6px">販売</span>
+              <span class="qlab" style="margin-left:8px">販売</span>
               <button class="qbtn" data-q="qty" data-d="-1">−</button>
               <input class="qin" type="number" inputmode="numeric" data-f="qty" value="${c.qty||0}">
               <button class="qbtn" data-q="qty" data-d="1">＋</button>
             </div>
-            <div class="vchips" style="margin-top:7px">${stockChip}${costChip}${profitChip}</div>
+            <div class="vchips" style="margin-top:8px">${stockChip}${costChip}${profitChip}</div>
           </div>
           <div class="vright">
             <div class="vprice num ${c.price>0?'':'zero'}">${c.price>0?yen(c.price):"—"}</div>
@@ -661,6 +667,20 @@ async function advanceVariant(p,v){
   const nm=v.stage>=stages.length?"完了":stages[v.stage];
   toast(`${v.label||"バリアント"} → ${nm}`,async()=>{
     v.stage=before; await persist(p); render();
+  });
+}
+
+// 指定した工程にいるバリアントだけを次へ（閉じた状態のチップから）
+async function advanceStage(p,stageIdx){
+  const targets=p.variants.filter(v=>(+v.stage||0)===stageIdx && stageIdx<stages.length);
+  if(!targets.length)return;
+  const before=p.variants.map(v=>+v.stage||0);
+  targets.forEach(v=>{v.stage=stageIdx+1;});
+  await persist(p); render();
+  const nm=stageIdx+1>=stages.length?"完了":stages[stageIdx+1];
+  toast(`${targets.length}件 → ${nm}`,async()=>{
+    p.variants.forEach((v,i)=>{v.stage=before[i];});
+    await persist(p); render();
   });
 }
 
