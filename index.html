@@ -1184,7 +1184,7 @@ function exportBaseCsv(){
       // BASEは種類行にも商品名・公開状態が必要（空欄だと「商品名は必須です」で弾かれる）
       if(C.title>=0)  row[C.title]=p.name||"";
       if(C.price>=0)  row[C.price]=c.price||0;
-      if(C.visible>=0)row[C.visible]=2;   // 2 = 非公開（安全側。確認後に公開）
+      if(C.visible>=0)row[C.visible]=0;   // 0 = 非公開（安全側。BASEで確認してから公開する）
 
       if(hasVariants){
         if(C.variName>=0) row[C.variName]=v.label||"";
