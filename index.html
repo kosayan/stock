@@ -1180,21 +1180,18 @@ function exportBaseCsv(){
       if(C.variId>=0)row[C.variId]="";
 
       const hasVariants=p.variants.length>1 || (v.label||"").trim()!=="";
-      if(vi===0){
-        if(C.title>=0)  row[C.title]=p.name||"";
-        // 商品説明は空欄（メモは内部管理用なので出力しない）
-        if(C.price>=0)  row[C.price]=c.price||0;
-        if(C.visible>=0)row[C.visible]=2;   // 2 = 非公開（安全側。確認後に公開）
-        if(C.order>=0)  row[C.order]="";
-        // 種類がない商品なら在庫数、ある商品は種類在庫数を使う
-        if(!hasVariants && C.stock>=0)row[C.stock]=Math.max(0,c.stock);
-      }else{
-        // 2行目以降は同じ商品の種類行。商品名は入れない。
-        if(C.price>=0)  row[C.price]=c.price||0;
-      }
+
+      // BASEは種類行にも商品名・公開状態が必要（空欄だと「商品名は必須です」で弾かれる）
+      if(C.title>=0)  row[C.title]=p.name||"";
+      if(C.price>=0)  row[C.price]=c.price||0;
+      if(C.visible>=0)row[C.visible]=2;   // 2 = 非公開（安全側。確認後に公開）
+
       if(hasVariants){
         if(C.variName>=0) row[C.variName]=v.label||"";
         if(C.variStock>=0)row[C.variStock]=Math.max(0,c.stock);
+      }else{
+        // 種類なしの商品は在庫数の列を使う
+        if(C.stock>=0)row[C.stock]=Math.max(0,c.stock);
       }
       lines.push(row.map(csvCell).join(","));
       n++;
