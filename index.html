@@ -102,9 +102,12 @@
   .search{flex:1;height:40px;border-radius:10px;background:rgba(255,255,255,.05);
     border:1px solid var(--line);color:var(--txt);padding:0 12px;font-size:15px;outline:none}
   .search:focus{border-color:rgba(34,211,238,.5)}
-  .sortbtn{height:40px;padding:0 12px;border-radius:10px;background:rgba(255,255,255,.05);
-    border:1px solid var(--line);color:var(--sub);font-size:12.5px;white-space:nowrap;cursor:pointer}
-  .sortbtn:active{background:rgba(255,255,255,.1)}
+  .sortbtn{height:40px;padding:0 30px 0 12px;border-radius:10px;background:rgba(255,255,255,.05);
+    border:1px solid var(--line);color:var(--txt);font-size:13px;white-space:nowrap;cursor:pointer;
+    -webkit-appearance:none;appearance:none;font-weight:700;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23aab2c0' stroke-width='3'><path d='M6 9l6 6 6-6'/></svg>");
+    background-repeat:no-repeat;background-position:right 10px center}
+  .sortbtn:active{background-color:rgba(255,255,255,.1)}
   /* ---- status ---- */
   /* stepper in variant editor */
   .stepper{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;
@@ -161,14 +164,15 @@
     cursor:pointer;white-space:nowrap;margin-top:8px}
   .bulkbtn:active{background:rgba(255,255,255,.14)}
   /* 数値クイック編集 */
-  .qty{display:flex;align-items:center;gap:5px;margin-top:8px}
-  .qbtn{width:28px;height:28px;border-radius:7px;border:1px solid var(--line);flex:0 0 auto;
-    background:rgba(255,255,255,.05);color:var(--sub);font-size:15px;font-weight:800;cursor:pointer}
-  .qbtn:active{background:rgba(255,255,255,.14)}
-  .qin{width:50px;height:28px;border-radius:7px;border:1px solid var(--line);text-align:center;
-    background:rgba(255,255,255,.05);color:var(--txt);font-size:13px;font-weight:700;
-    font-variant-numeric:tabular-nums;-webkit-appearance:none;padding:0}
-  .qlab{font-size:10.5px;color:var(--faint);flex:0 0 auto}
+  .qty{display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+  .qbtn{width:32px;height:36px;border-radius:8px;border:1px solid var(--line);flex:0 0 auto;
+    background:rgba(255,255,255,.06);color:var(--txt);font-size:18px;font-weight:800;cursor:pointer}
+  .qbtn:active{background:rgba(255,255,255,.16)}
+  .qin{width:64px;height:36px;border-radius:8px;border:1px solid var(--line);text-align:center;
+    background:rgba(255,255,255,.08);color:var(--txt);font-size:16px;font-weight:800;
+    font-variant-numeric:tabular-nums;-webkit-appearance:none;padding:0;flex:0 0 auto}
+  .qin:focus{border-color:rgba(34,211,238,.5);background:rgba(255,255,255,.1)}
+  .qlab{font-size:12px;color:var(--sub);flex:0 0 auto;font-weight:700}
   /* ---- メモ ---- */
   .memo{margin-top:9px}
   .memolab{font-size:10.5px;color:var(--faint);margin-bottom:4px;display:flex;
@@ -270,7 +274,7 @@
   </div>
   <div class="toolbar">
     <input class="search" id="q" placeholder="🔍 商品名・サイズ・メモで検索">
-    <button class="sortbtn" id="sortBtn">利益順 ▾</button>
+    <select class="sortbtn" id="sortSel"></select>
   </div>
   <div class="filterbar" id="filterbar"></div>
   <div id="list"></div>
@@ -386,6 +390,8 @@ function vcalc(v){
 const SORTS=[
   {k:"delay", label:"遅れ順"},
   {k:"profit",label:"利益順"},
+  {k:"net",   label:"純利益順（現在）"},
+  {k:"rev",   label:"売上順"},
   {k:"stockval",label:"在庫金額順"},
   {k:"stock",  label:"在庫少順"},
   {k:"name",  label:"名前順"},
@@ -394,11 +400,12 @@ let sortIdx=0;
 let query="";
 
 function psum(p){
-  let profit=0,stock=0,rev=0,stockVal=0;
+  let profit=0,stock=0,rev=0,stockVal=0,net=0;
   p.variants.forEach(v=>{const c=vcalc(v);
     profit+=c.profit;stock+=c.stock;rev+=c.total;
-    stockVal+=c.cost*Math.max(0,c.stock);});
-  return {profit,stock,rev,stockVal};
+    stockVal+=c.cost*Math.max(0,c.stock);
+    net+=c.net;});
+  return {profit,stock,rev,stockVal,net};
 }
 
 function renderFilters(){
@@ -452,6 +459,8 @@ function visibleProducts(){
     if(s==="name")return (x.name||"").localeCompare(y.name||"","ja");
     if(s==="stock")return psum(x).stock-psum(y).stock;
     if(s==="stockval")return psum(y).stockVal-psum(x).stockVal;
+    if(s==="net")return psum(y).net-psum(x).net;
+    if(s==="rev")return psum(y).rev-psum(x).rev;
     return psum(y).profit-psum(x).profit;
   });
   return arr;
@@ -472,7 +481,6 @@ function render(){
   $("#sProfit").className="v num "+(profit<0?"pink":profit>0?"cyan":"zero");
   $("#sStock").textContent=stock;
   $("#sPotential").textContent=yen(potential);
-  $("#sortBtn").textContent=SORTS[sortIdx].label+" ▾";
   updateProgScale();
   renderFilters();
 
@@ -1200,6 +1208,24 @@ function exportBaseCsv(){
 
   if(!n){alert("書き出す商品がありません。");return;}
 
+  // 公開状態は取り返しがつかないので、書き出し前に必ず明示して確認する
+  const zeroStock=[];
+  products.forEach(p=>p.variants.forEach(v=>{
+    const c=vcalc(v);
+    if(c.stock<=0)zeroStock.push(`${p.name||"?"} / ${v.label||"?"}`);
+  }));
+  let msg=`${n}行を書き出します。\n\n`+
+    `【公開状態】非公開（0）で出力します。\n`+
+    `アップロード後、BASEの管理画面で中身を確認してから手動で公開してください。\n\n`+
+    `【入る項目】商品名・種類名・価格・種類在庫数のみ\n`+
+    `説明文と画像は入りません。`;
+  if(zeroStock.length){
+    msg+=`\n\n⚠️ 在庫0の種類が ${zeroStock.length}件 あります（売り切れ状態で登録されます）:\n`+
+      zeroStock.slice(0,6).join("\n")+(zeroStock.length>6?`\nほか${zeroStock.length-6}件`:"");
+  }
+  msg+=`\n\n書き出しますか？`;
+  if(!confirm(msg))return;
+
   // BOM付きUTF-8（Excel/Numbersで文字化けしない）
   const blob=new Blob(["\ufeff"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
   const url=URL.createObjectURL(blob);
@@ -1273,7 +1299,10 @@ window.editProduct=editProduct;
 $("#addBtn").onclick=()=>editProduct();
 $("#setBtn").onclick=openSettings;
 $("#q").addEventListener("input",e=>{query=e.target.value;render();});
-$("#sortBtn").onclick=()=>{sortIdx=(sortIdx+1)%SORTS.length;render();};
+const sortSel=$("#sortSel");
+sortSel.innerHTML=SORTS.map((s,i)=>`<option value="${i}">${s.label}</option>`).join("");
+sortSel.value=String(sortIdx);
+sortSel.onchange=()=>{sortIdx=+sortSel.value;render();};
 
 /* ---------- boot + migrate flat -> two-tier ---------- */
 (async()=>{
